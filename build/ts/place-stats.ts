@@ -1,9 +1,9 @@
+import type { Timestamp } from "firebase/firestore";
+
 /**
  * Aggregated community stats for a single place (Firestore collection `place_stats`, doc id
  * = safeId(placeId)). Source of truth for both yomp-next (TS) and yomp-android (Kotlin).
  */
-export type Timestamp = unknown;
-
 export interface PlaceStats {
     /**
      * Optional map keyed by AttributeKey (see community.json) → AttributeCount. Absent on

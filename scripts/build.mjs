@@ -44,8 +44,8 @@ function aliasTimestampTs(file) {
   // Drop any generated `Timestamp` interface/type declaration.
   s = s.replace(/export interface Timestamp \{[\s\S]*?\n\}\n?/g, "");
   s = s.replace(/export type Timestamp = [^;]+;\n?/g, "");
-  // Inject the neutral alias once.
-  s = s.replace(/(^|\n)(export interface PlaceStats)/, `$1export type Timestamp = unknown;\n\n$2`);
+  // Bind Timestamp to the real Firebase type via a type-only import (parity with Kotlin alias).
+  s = `import type { Timestamp } from "firebase/firestore";\n\n${s}`;
   writeFileSync(file, s);
 }
 

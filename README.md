@@ -27,9 +27,11 @@ codegen themselves.
   `STATUS` (`yes`/`no`/`check`), the six `ATTRIBUTE_KEYS`, `MIN_COMMUNITY_VOTES` (3),
   `HIGH_CONFIDENCE_VOTES` (10), and `safeId()` (the Firestore doc-id sanitiser).
 
-`lastUpdated` is a Firestore server Timestamp — represented as an **opaque per-platform alias**
-(`unknown` in TS, `com.google.firebase.Timestamp` in Kotlin) so each side maps to its SDK's native
-Timestamp.
+`lastUpdated` is a Firestore server Timestamp — bound to each platform's **native SDK type**:
+TS uses a type-only `import type { Timestamp } from "firebase/firestore"`, Kotlin uses
+`typealias Timestamp = com.google.firebase.Timestamp`. Both sides therefore map straight to the
+Firestore SDK's `Timestamp` (zero runtime cost in TS — consumers resolve it from their own
+`firebase` install).
 
 ## Build
 
