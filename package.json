@@ -1,0 +1,16 @@
+{
+  "name": "yomp-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Neutral source of truth for Yomp's Firestore data contracts. One JSON Schema + constants source generates TypeScript types (web) and Kotlin data classes (native), consumed by yomp-next and yomp-android as a git submodule.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "verify": "tsc --noEmit"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "quicktype": "^23.0.0",
+    "typescript": "^5.6.0"
+  }
+}

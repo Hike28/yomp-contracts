@@ -1,0 +1,16 @@
+{
+  "status": ["yes", "no", "check"],
+  "attributeKeys": [
+    "waterBowl",
+    "insideAllowed",
+    "offLead",
+    "enclosedGarden",
+    "treats",
+    "dogMenu"
+  ],
+  "thresholds": {
+    "MIN_COMMUNITY_VOTES": 3,
+    "HIGH_CONFIDENCE_VOTES": 10
+  },
+  "safeIdPattern": "[^a-zA-Z0-9_-]"
+}

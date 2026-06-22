@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contracts.yomp.dog/place-stats.schema.json",
+  "title": "PlaceStats",
+  "description": "Aggregated community stats for a single place (Firestore collection `place_stats`, doc id = safeId(placeId)). Source of truth for both yomp-next (TS) and yomp-android (Kotlin).",
+  "type": "object",
+  "definitions": {
+    "Timestamp": {
+      "description": "Opaque Firestore server Timestamp. The neutral schema leaves it untyped; build.mjs aliases it per platform (TS = unknown, Kotlin = com.google.firebase.Timestamp) because the Firestore SDK deserialises it into a platform-native Timestamp object on read.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "AttributeCount": {
+      "description": "Per-attribute up/down vote tally and net score.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "up": { "type": "integer" },
+        "down": { "type": "integer" },
+        "score": { "type": "integer" }
+      },
+      "required": ["up", "down", "score"]
+    }
+  },
+  "properties": {
+    "confirmationCount": { "type": "integer" },
+    "negativeCount": { "type": "integer" },
+    "ratingCount": { "type": "integer" },
+    "totalRatingPoints": { "type": "integer" },
+    "checkCount": { "type": "integer" },
+    "lastUpdated": { "$ref": "#/definitions/Timestamp" },
+    "attributeCounts": {
+      "description": "Optional map keyed by AttributeKey (see community.json) → AttributeCount. Absent on legacy docs predating attribute voting.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/AttributeCount" }
+    }
+  },
+  "required": [
+    "confirmationCount",
+    "negativeCount",
+    "ratingCount",
+    "totalRatingPoints"
+  ],
+  "additionalProperties": false
+}
