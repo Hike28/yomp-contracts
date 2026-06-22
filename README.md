@@ -27,11 +27,21 @@ codegen themselves.
   `STATUS` (`yes`/`no`/`check`), the six `ATTRIBUTE_KEYS`, `MIN_COMMUNITY_VOTES` (3),
   `HIGH_CONFIDENCE_VOTES` (10), and `safeId()` (the Firestore doc-id sanitiser).
 
-`lastUpdated` is a Firestore server Timestamp — bound to each platform's **native SDK type**:
-TS uses a type-only `import type { Timestamp } from "firebase/firestore"`, Kotlin uses
-`typealias Timestamp = com.google.firebase.Timestamp`. Both sides therefore map straight to the
-Firestore SDK's `Timestamp` (zero runtime cost in TS — consumers resolve it from their own
-`firebase` install).
+`lastUpdated` is a Firestore server Timestamp — bound to each platform's **native SDK type**, but
+the two outputs diverge by design so each matches how that platform actually writes/reads the field:
+
+- **TS** emits it **required** as `lastUpdated: Timestamp | FieldValue | null` via a type-only
+  `import type { FieldValue, Timestamp } from "firebase/firestore"` — `Timestamp` on read,
+  `FieldValue` for the `serverTimestamp()` write moment, `null` for a cleared/normalised value.
+- **Kotlin** keeps nullable `val lastUpdated: Timestamp? = null` (`typealias Timestamp =
+com.google.firebase.Timestamp`). `FieldValue` is an SDK write-sentinel with no data-class form, so
+  it never appears in the Kotlin shape.
+
+Both map straight to the Firestore SDK's `Timestamp` (zero runtime cost in TS — consumers resolve it
+from their own `firebase` install). The shared JSON Schema leaves `lastUpdated` optional (legacy
+docs can lack it); the TS-required narrowing lives in `build.mjs`'s post-process, not `required[]`,
+precisely so Kotlin can stay nullable. Likewise `attributeCounts` is narrowed to
+`Partial<Record<AttributeKey, AttributeCount>>` in TS while Kotlin keeps `Map<String, AttributeCount>?`.
 
 ## Build
 

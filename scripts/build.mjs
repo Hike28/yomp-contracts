@@ -39,13 +39,17 @@ quicktype(`--src-lang schema --lang kotlin --framework just-types --package ${KO
 // per-platform alias (faithful to how the Firestore SDK deserialises it).
 function aliasTimestampTs(file) {
   let s = readFileSync(file, "utf8");
-  // Force the field type to `Timestamp` regardless of how quicktype named it.
-  s = s.replace(/(\blastUpdated\??\s*:\s*)[^;\n]+/g, "$1Timestamp");
+  // Force the field REQUIRED (drop quicktype's `?`) and to the full write/read/null
+  // union: Timestamp = reads, FieldValue = the serverTimestamp() write moment, null =
+  // web's `?? null` / cleared. This is a TS-only narrowing — the shared schema keeps
+  // lastUpdated optional (legacy docs) and Kotlin stays nullable `Timestamp?`.
+  s = s.replace(/\blastUpdated\??\s*:\s*[^;\n]+/g, "lastUpdated: Timestamp | FieldValue | null");
   // Drop any generated `Timestamp` interface/type declaration.
   s = s.replace(/export interface Timestamp \{[\s\S]*?\n\}\n?/g, "");
   s = s.replace(/export type Timestamp = [^;]+;\n?/g, "");
-  // Bind Timestamp to the real Firebase type via a type-only import (parity with Kotlin alias).
-  s = `import type { Timestamp } from "firebase/firestore";\n\n${s}`;
+  // Bind Timestamp + FieldValue to the real Firebase types via a type-only import
+  // (parity with the Kotlin Timestamp alias; FieldValue has no Kotlin data-class form).
+  s = `import type { FieldValue, Timestamp } from "firebase/firestore";\n\n${s}`;
   writeFileSync(file, s);
 }
 
@@ -66,7 +70,23 @@ function aliasTimestampKotlin(file) {
   writeFileSync(file, s);
 }
 
+// Narrow the TS attributeCounts map keys to AttributeKey (web parity). quicktype
+// emits an open string-index signature from the schema's additionalProperties; rewrite
+// it to Partial<Record<AttributeKey, AttributeCount>>. TS-only — Kotlin keeps
+// Map<String, AttributeCount>? (no enum-keyed-map equivalent in the data class).
+function narrowAttributeCountsTs(file) {
+  let s = readFileSync(file, "utf8");
+  s = s.replace(
+    /(\battributeCounts\??\s*:\s*)\{\s*\[key:\s*string\]\s*:\s*AttributeCount\s*\}/g,
+    "$1Partial<Record<AttributeKey, AttributeCount>>",
+  );
+  // Bind AttributeKey from the generated constants (sibling file in build/ts).
+  s = `import type { AttributeKey } from "./constants";\n${s}`;
+  writeFileSync(file, s);
+}
+
 aliasTimestampTs(tsOut);
+narrowAttributeCountsTs(tsOut);
 aliasTimestampKotlin(ktOut);
 
 // ── 3. Constants codegen ────────────────────────────────────────────────────

@@ -9,7 +9,9 @@ typealias Timestamp = com.google.firebase.Timestamp
 data class PlaceStats (
     /**
      * Optional map keyed by AttributeKey (see community.json) → AttributeCount. Absent on
-     * legacy docs predating attribute voting.
+     * legacy docs predating attribute voting. TS narrows this to `Partial<Record<AttributeKey,
+     * AttributeCount>>` (key domain = the six AttributeKeys); Kotlin keeps `Map<String,
+     * AttributeCount>?`.
      */
     val attributeCounts: Map<String, AttributeCount>? = null,
 

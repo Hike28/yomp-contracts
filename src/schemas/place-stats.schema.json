@@ -6,7 +6,7 @@
   "type": "object",
   "definitions": {
     "Timestamp": {
-      "description": "Opaque Firestore server Timestamp. The neutral schema leaves it untyped; build.mjs aliases it per platform (TS = unknown, Kotlin = com.google.firebase.Timestamp) because the Firestore SDK deserialises it into a platform-native Timestamp object on read.",
+      "description": "Opaque Firestore server Timestamp. The neutral schema leaves it untyped; build.mjs aliases it per platform because the Firestore SDK deserialises it into a platform-native Timestamp on read. TS narrows lastUpdated to the REQUIRED union `Timestamp | FieldValue | null` (read | serverTimestamp() write sentinel | cleared); Kotlin keeps nullable `com.google.firebase.Timestamp?` (no FieldValue data-class equivalent).",
       "type": "object",
       "additionalProperties": true
     },
@@ -30,7 +30,7 @@
     "checkCount": { "type": "integer" },
     "lastUpdated": { "$ref": "#/definitions/Timestamp" },
     "attributeCounts": {
-      "description": "Optional map keyed by AttributeKey (see community.json) → AttributeCount. Absent on legacy docs predating attribute voting.",
+      "description": "Optional map keyed by AttributeKey (see community.json) → AttributeCount. Absent on legacy docs predating attribute voting. TS narrows this to `Partial<Record<AttributeKey, AttributeCount>>` (key domain = the six AttributeKeys); Kotlin keeps `Map<String, AttributeCount>?`.",
       "type": "object",
       "additionalProperties": { "$ref": "#/definitions/AttributeCount" }
     }

@@ -1,4 +1,5 @@
-import type { Timestamp } from "firebase/firestore";
+import type { AttributeKey } from "./constants";
+import type { FieldValue, Timestamp } from "firebase/firestore";
 
 /**
  * Aggregated community stats for a single place (Firestore collection `place_stats`, doc id
@@ -7,12 +8,14 @@ import type { Timestamp } from "firebase/firestore";
 export interface PlaceStats {
     /**
      * Optional map keyed by AttributeKey (see community.json) → AttributeCount. Absent on
-     * legacy docs predating attribute voting.
+     * legacy docs predating attribute voting. TS narrows this to `Partial<Record<AttributeKey,
+     * AttributeCount>>` (key domain = the six AttributeKeys); Kotlin keeps `Map<String,
+     * AttributeCount>?`.
      */
-    attributeCounts?:  { [key: string]: AttributeCount };
+    attributeCounts?:  Partial<Record<AttributeKey, AttributeCount>>;
     checkCount?:       number;
     confirmationCount: number;
-    lastUpdated?:      Timestamp;
+    lastUpdated: Timestamp | FieldValue | null;
     negativeCount:     number;
     ratingCount:       number;
     totalRatingPoints: number;
