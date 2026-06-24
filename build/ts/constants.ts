@@ -14,3 +14,21 @@ export const SAFE_ID_PATTERN = /[^a-zA-Z0-9_-]/g;
 export function safeId(id: string): string {
   return id.replace(SAFE_ID_PATTERN, "_");
 }
+
+export const MAP_CATEGORY_KEYS = ["pubs", "parks", "cafes", "stays", "enclosed", "beaches", "trails"] as const;
+export type MapCategoryKey = (typeof MAP_CATEGORY_KEYS)[number];
+
+export interface ClusterRadiusRule { minZoom: number; radius: number; }
+export interface ClusterCountBucket { minCount: number; outer: number; inner: number; font: number; }
+export interface ClusterPolicy {
+  maxClusterRadiusByZoom: readonly ClusterRadiusRule[];
+  countBuckets: readonly ClusterCountBucket[];
+  spiderfyOnMaxZoom: boolean;
+  clusterPerCategory: boolean;
+}
+export const CLUSTER_POLICY: ClusterPolicy = {
+  maxClusterRadiusByZoom: [ { minZoom: 14, radius: 40 }, { minZoom: 12, radius: 60 }, { minZoom: 0, radius: 80 } ],
+  countBuckets: [ { minCount: 100, outer: 46, inner: 38, font: 13 }, { minCount: 10, outer: 38, inner: 32, font: 12 }, { minCount: 0, outer: 30, inner: 26, font: 11 } ],
+  spiderfyOnMaxZoom: true,
+  clusterPerCategory: true,
+};

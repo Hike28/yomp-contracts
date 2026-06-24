@@ -1,0 +1,25 @@
+{
+  "mapCategoryKeys": [
+    "pubs",
+    "parks",
+    "cafes",
+    "stays",
+    "enclosed",
+    "beaches",
+    "trails"
+  ],
+  "clusterPolicy": {
+    "maxClusterRadiusByZoom": [
+      { "minZoom": 14, "radius": 40 },
+      { "minZoom": 12, "radius": 60 },
+      { "minZoom": 0, "radius": 80 }
+    ],
+    "countBuckets": [
+      { "minCount": 100, "outer": 46, "inner": 38, "font": 13 },
+      { "minCount": 10, "outer": 38, "inner": 32, "font": 12 },
+      { "minCount": 0, "outer": 30, "inner": 26, "font": 11 }
+    ],
+    "spiderfyOnMaxZoom": true,
+    "clusterPerCategory": true
+  }
+}
