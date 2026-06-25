@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contracts.yomp.dog/user-record.schema.json",
+  "title": "UserRecord",
+  "description": "A Yomp user's Firestore document (collection `users`, doc id = uid). PARTIAL-PATCH model: every top-level field is OPTIONAL (no root `required[]`) because writes patch a subset. All stored values are PRIMITIVE — there are deliberately NO string enums in this schema, so out-of-domain values (e.g. a future provider or theme) deserialise as plain strings on both platforms and can never crash a typed enum. Source of truth for both yomp-next (TS) and yomp-android (Kotlin).",
+  "type": "object",
+  "definitions": {
+    "Timestamp": {
+      "description": "Opaque Firestore server Timestamp. The neutral schema leaves it untyped; build.mjs aliases it per platform because the Firestore SDK deserialises it into a platform-native Timestamp on read. TS narrows each timestamp to `Timestamp | FieldValue | null` (read | serverTimestamp() write sentinel | cleared) but keeps it OPTIONAL; Kotlin keeps nullable `com.google.firebase.Timestamp?` (no FieldValue data-class equivalent).",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "DogBirthday": {
+      "description": "Canonical birthday for the singular `dog`. month + year are required; day is optional (some users give only month/year).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "month": { "type": "integer" },
+        "year": { "type": "integer" },
+        "day": { "type": "integer" }
+      },
+      "required": ["month", "year"]
+    },
+    "Dog": {
+      "description": "Canonical single-dog shape (native + active web). birthday is canonical; dob is legacy.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "breed": { "type": "string" },
+        "birthday": { "$ref": "#/definitions/DogBirthday" },
+        "dob": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "onboardingVersion": { "type": "integer" }
+      },
+      "required": ["name", "breed", "birthday"]
+    },
+    "DogListEntry": {
+      "description": "LEGACY web multi-dog list. Not written by native v1. Reconcile with singular `dog` in a future migration.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "breed": { "type": "string" },
+        "size": { "type": "string" },
+        "preferredCategory": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "birthday": { "type": "object", "additionalProperties": true }
+      },
+      "required": ["id", "name", "breed", "size"]
+    }
+  },
+  "properties": {
+    "uid": { "type": "string" },
+    "displayName": { "type": "string" },
+    "email": { "type": "string" },
+    "photoURL": { "type": "string" },
+    "provider": {
+      "description": "Auth provider id. Should be an AUTH_PROVIDERS value (see account.json) but is a plain string — validated at the app layer, never a typed enum.",
+      "type": "string"
+    },
+    "createdAt": { "$ref": "#/definitions/Timestamp" },
+    "lastSignIn": { "$ref": "#/definitions/Timestamp" },
+    "updatedAt": { "$ref": "#/definitions/Timestamp" },
+    "onboardingCompletedAt": { "$ref": "#/definitions/Timestamp" },
+    "signInCount": { "type": "integer" },
+    "dog": { "$ref": "#/definitions/Dog" },
+    "dogs": {
+      "description": "LEGACY web multi-dog list. Not written by native v1. Reconcile with singular `dog` in a future migration.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/DogListEntry" }
+    },
+    "preferredCategories": {
+      "description": "Each element should be a CATEGORY_KEYS value; consumers must filter unknown values on read.",
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 10
+    },
+    "seenPlaceIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 500
+    },
+    "themeMode": {
+      "description": "One of THEME_MODES. Writing any other value is rejected by Firestore rules.",
+      "type": "string"
+    },
+    "marketingConsent": { "type": "boolean" },
+    "acquisitionSource": {
+      "description": "Opaque acquisition/attribution payload — shape intentionally unconstrained.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "username": { "type": "string" },
+    "appVersion": { "type": "string", "maxLength": 50 },
+    "platform": { "type": "string", "maxLength": 20 }
+  },
+  "additionalProperties": false
+}

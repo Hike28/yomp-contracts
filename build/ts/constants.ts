@@ -32,3 +32,12 @@ export const CLUSTER_POLICY: ClusterPolicy = {
   spiderfyOnMaxZoom: true,
   clusterPerCategory: true,
 };
+
+export const CATEGORY_KEYS = ["pubs", "parks", "cafes", "stays", "enclosed", "beaches", "trails"] as const;
+export type CategoryKey = (typeof CATEGORY_KEYS)[number];
+
+export const AUTH_PROVIDERS = ["google.com", "apple.com", "password", "unknown"] as const;
+export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
+
+export const THEME_MODES = ["auto", "spring", "summer", "autumn", "winter"] as const;
+export type ThemeMode = (typeof THEME_MODES)[number];

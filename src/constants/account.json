@@ -1,0 +1,13 @@
+{
+  "categoryKeys": [
+    "pubs",
+    "parks",
+    "cafes",
+    "stays",
+    "enclosed",
+    "beaches",
+    "trails"
+  ],
+  "authProviders": ["google.com", "apple.com", "password", "unknown"],
+  "themeModes": ["auto", "spring", "summer", "autumn", "winter"]
+}
