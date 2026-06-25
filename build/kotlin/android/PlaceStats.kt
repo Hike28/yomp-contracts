@@ -1,7 +1,5 @@
 package dog.yomp.contracts
 
-typealias Timestamp = com.google.firebase.Timestamp
-
 /**
  * Aggregated community stats for a single place (Firestore collection `place_stats`, doc id
  * = safeId(placeId)). Source of truth for both yomp-next (TS) and yomp-android (Kotlin).
@@ -17,7 +15,7 @@ data class PlaceStats (
 
     val checkCount: Long? = null,
     val confirmationCount: Long,
-    val lastUpdated: Timestamp? = null,
+    val lastUpdated: com.google.firebase.Timestamp? = null,
     val negativeCount: Long,
     val ratingCount: Long,
     val totalRatingPoints: Long

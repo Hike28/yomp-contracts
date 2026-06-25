@@ -1,7 +1,5 @@
 package dog.yomp.contracts
 
-typealias Timestamp = com.google.firebase.Timestamp
-
 /**
  * A Yomp user's Firestore document (collection `users`, doc id = uid). PARTIAL-PATCH model:
  * every top-level field is OPTIONAL (no root `required[]`) because writes patch a subset.
@@ -17,7 +15,7 @@ data class UserRecord (
     val acquisitionSource: Map<String, Any?>? = null,
 
     val appVersion: String? = null,
-    val createdAt: Timestamp? = null,
+    val createdAt: com.google.firebase.Timestamp? = null,
     val displayName: String? = null,
     val dog: Dog? = null,
 
@@ -28,9 +26,9 @@ data class UserRecord (
     val dogs: List<DogListEntry>? = null,
 
     val email: String? = null,
-    val lastSignIn: Timestamp? = null,
+    val lastSignIn: com.google.firebase.Timestamp? = null,
     val marketingConsent: Boolean? = null,
-    val onboardingCompletedAt: Timestamp? = null,
+    val onboardingCompletedAt: com.google.firebase.Timestamp? = null,
     val photoURL: String? = null,
     val platform: String? = null,
 
@@ -55,7 +53,7 @@ data class UserRecord (
     val themeMode: String? = null,
 
     val uid: String? = null,
-    val updatedAt: Timestamp? = null,
+    val updatedAt: com.google.firebase.Timestamp? = null,
     val username: String? = null
 )
 

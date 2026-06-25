@@ -61,18 +61,16 @@ function aliasTimestampTs(file) {
 
 function aliasTimestampKotlin(file) {
   let s = readFileSync(file, "utf8");
-  // Rewrite the whole lastUpdated type to `Timestamp?` (quicktype inlines the
-  // opaque object as `Map<String, Any?>?`, whose embedded comma defeats a simple
-  // token match — so match lazily to end-of-line, preserving any ` = null`/comma).
-  s = s.replace(/(val lastUpdated:\s*).+?(\s*=\s*null)?(,)?(\r?\n)/g, "$1Timestamp?$2$3$4");
-  // Drop any generated Timestamp class/typealias.
+  // Rewrite the whole lastUpdated type to the FQ `com.google.firebase.Timestamp?`
+  // (quicktype inlines the opaque object as `Map<String, Any?>?`, whose embedded comma
+  // defeats a simple token match — so match lazily to end-of-line, preserving any
+  // ` = null`/comma). FQN inline avoids a per-file `typealias Timestamp` that would
+  // collide (Redeclaration) once android/ files co-compile into one source set.
+  s = s.replace(/(val lastUpdated:\s*).+?(\s*=\s*null)?(,)?(\r?\n)/g, "$1com.google.firebase.Timestamp?$2$3$4");
+  // Drop any generated Timestamp class/typealias (the field now carries the FQN inline,
+  // so no top-level alias is emitted — nothing left to collide on co-compile).
   s = s.replace(/(?:data )?class Timestamp \([\s\S]*?\)\n?/g, "");
   s = s.replace(/typealias Timestamp = .*\n?/g, "");
-  // Inject the alias right after the package declaration.
-  s = s.replace(
-    /(package\s+[\w.]+\n)/,
-    `$1\ntypealias Timestamp = com.google.firebase.Timestamp\n`,
-  );
   writeFileSync(file, s);
 }
 
@@ -131,11 +129,11 @@ function aliasTimestampsKotlin(file, fields) {
   for (const f of fields) {
     // Lazy match to end-of-line preserves any ` = null`/comma (quicktype inlines the opaque
     // Timestamp object as `Map<String, Any?>?`, whose embedded comma defeats a token match).
-    s = s.replace(new RegExp(`(val ${f}:\\s*).+?(\\s*=\\s*null)?(,)?(\\r?\\n)`, "g"), "$1Timestamp?$2$3$4");
+    // FQN inline (no top-level alias) so multiple android/ files never redeclare Timestamp.
+    s = s.replace(new RegExp(`(val ${f}:\\s*).+?(\\s*=\\s*null)?(,)?(\\r?\\n)`, "g"), "$1com.google.firebase.Timestamp?$2$3$4");
   }
   s = s.replace(/(?:data )?class Timestamp \([\s\S]*?\)\n?/g, "");
   s = s.replace(/typealias Timestamp = .*\n?/g, "");
-  s = s.replace(/(package\s+[\w.]+\n)/, `$1\ntypealias Timestamp = com.google.firebase.Timestamp\n`);
   writeFileSync(file, s);
 }
 
