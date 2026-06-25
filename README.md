@@ -14,7 +14,8 @@ src/schemas/*.schema.json     authored JSON Schema (draft-07) — document shape
 src/constants/community.json  authored constant values — enums, thresholds, rules
 scripts/build.mjs             codegen: quicktype (shapes) + constants emitter
 build/ts/                     GENERATED TypeScript (committed)
-build/kotlin/                 GENERATED Kotlin    (committed)
+build/kotlin/common/          GENERATED Kotlin — commonMain-safe (committed)
+build/kotlin/android/         GENERATED Kotlin — Firebase/androidMain-bound (committed)
 ```
 
 `build/` is **committed** — consumers read the generated files via the submodule and never run
@@ -22,8 +23,8 @@ codegen themselves.
 
 ## What's encoded so far
 
-- **`place_stats`** document shape (`build/ts/place-stats.ts`, `build/kotlin/PlaceStats.kt`).
-- **Core community constants** (`build/ts/constants.ts`, `build/kotlin/Community.kt`):
+- **`place_stats`** document shape (`build/ts/place-stats.ts`, `build/kotlin/android/PlaceStats.kt`).
+- **Core community constants** (`build/ts/constants.ts`, `build/kotlin/common/Community.kt`):
   `STATUS` (`yes`/`no`/`check`), the six `ATTRIBUTE_KEYS`, `MIN_COMMUNITY_VOTES` (3),
   `HIGH_CONFIDENCE_VOTES` (10), and `safeId()` (the Firestore doc-id sanitiser).
 
@@ -60,5 +61,6 @@ consumes this repo (Kotlin package `dog.yomp.contracts`).
 git submodule add https://github.com/Hike28/yomp-contracts vendor/yomp-contracts
 ```
 
-Web imports from `build/ts/`; native sources `build/kotlin/` into `:shared`. (Wiring is done in the
-consuming repos, not here.)
+Web imports from `build/ts/`; native sources `build/kotlin/common/` into `:shared` commonMain and
+`build/kotlin/android/` into androidMain (the latter carries the Firebase `Timestamp` typealias).
+(Wiring is done in the consuming repos, not here.)

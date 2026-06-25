@@ -17,8 +17,14 @@ const KOTLIN_PACKAGE = "dog.yomp.contracts";
 
 const TS_DIR = join(ROOT, "build", "ts");
 const KT_DIR = join(ROOT, "build", "kotlin");
+// Split generated Kotlin by KMP source-set safety: common/ = pure-stdlib contracts
+// (wire into commonMain), android/ = Firebase/platform-bound (androidMain only). An
+// ios/ dir can join later. Mirrors how yomp-android's :shared consumes this.
+const KT_COMMON_DIR = join(KT_DIR, "common");
+const KT_ANDROID_DIR = join(KT_DIR, "android");
 mkdirSync(TS_DIR, { recursive: true });
-mkdirSync(KT_DIR, { recursive: true });
+mkdirSync(KT_COMMON_DIR, { recursive: true });
+mkdirSync(KT_ANDROID_DIR, { recursive: true });
 
 const SCHEMA = join(ROOT, "src", "schemas", "place-stats.schema.json");
 
@@ -28,7 +34,7 @@ function quicktype(args) {
 }
 
 const tsOut = join(TS_DIR, "place-stats.ts");
-const ktOut = join(KT_DIR, "PlaceStats.kt");
+const ktOut = join(KT_ANDROID_DIR, "PlaceStats.kt");
 
 quicktype(`--src-lang schema --lang ts --just-types --src "${SCHEMA}" -o "${tsOut}"`);
 quicktype(`--src-lang schema --lang kotlin --framework just-types --package ${KOTLIN_PACKAGE} --src "${SCHEMA}" -o "${ktOut}"`);
@@ -131,7 +137,7 @@ object Community {
     fun safeId(id: String): String = id.replace(SAFE_ID_REGEX, "_")
 }
 `;
-writeFileSync(join(KT_DIR, "Community.kt"), ktConstants);
+writeFileSync(join(KT_COMMON_DIR, "Community.kt"), ktConstants);
 
 // ── 4. Map constants codegen ────────────────────────────────────────────────
 // Map/cluster constants live in their own source (src/constants/map.json) for clean
@@ -188,6 +194,6 @@ val CLUSTER_POLICY: ClusterPolicy = ClusterPolicy(
     clusterPerCategory = ${clusterPolicy.clusterPerCategory},
 )
 `;
-writeFileSync(join(KT_DIR, "Map.kt"), ktMap);
+writeFileSync(join(KT_COMMON_DIR, "Map.kt"), ktMap);
 
 console.log("✔ build complete — build/ts + build/kotlin");
