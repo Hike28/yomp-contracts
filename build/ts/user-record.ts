@@ -47,6 +47,15 @@ export interface UserRecord {
     uid?:       string;
     updatedAt?: Timestamp | FieldValue | null;
     username?:  string;
+    /**
+     * Display-cased form of `username` (e.g. "TomWalks") for presentation; the canonical
+     * `username` stays lowercase (join key + uniqueness doc id). OPTIONAL — legacy lowercase
+     * users have none; the claim API writes it on a new claim. Allows UPPERCASE, unlike the
+     * canonical handle. The pattern documents the Firestore-rules constraint
+     * (`^[a-zA-Z0-9_]{3,20}$`); the build is type-only so it is not propagated into the
+     * generated types.
+     */
+    usernameDisplay?: string;
 }
 
 /**
