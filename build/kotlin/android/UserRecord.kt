@@ -44,6 +44,12 @@ data class UserRecord (
      */
     val provider: String? = null,
 
+    /**
+     * Whether this account is a standard user or a business claiming venues. Plain string —
+     * validated at the app layer via ROLES constants; never a typed enum.
+     */
+    val role: String? = null,
+
     val seenPlaceIds: List<String>? = null,
     val signInCount: Long? = null,
 

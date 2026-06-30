@@ -37,7 +37,12 @@ export interface UserRecord {
      * Auth provider id. Should be an AUTH_PROVIDERS value (see account.json) but is a plain
      * string — validated at the app layer, never a typed enum.
      */
-    provider?:     string;
+    provider?: string;
+    /**
+     * Whether this account is a standard user or a business claiming venues. Plain string —
+     * validated at the app layer via ROLES constants; never a typed enum.
+     */
+    role?:         string;
     seenPlaceIds?: string[];
     signInCount?:  number;
     /**

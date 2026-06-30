@@ -99,7 +99,11 @@
       "pattern": "^[a-zA-Z0-9_]{3,20}$"
     },
     "appVersion": { "type": "string", "maxLength": 50 },
-    "platform": { "type": "string", "maxLength": 20 }
+    "platform": { "type": "string", "maxLength": 20 },
+    "role": {
+      "type": "string",
+      "description": "Whether this account is a standard user or a business claiming venues. Plain string — validated at the app layer via ROLES constants; never a typed enum."
+    }
   },
   "additionalProperties": false
 }
