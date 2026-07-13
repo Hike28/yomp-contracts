@@ -20,8 +20,9 @@ data class UserRecord (
     val dog: Dog? = null,
 
     /**
-     * LEGACY web multi-dog list. Not written by native v1. Reconcile with singular `dog` in a
-     * future migration.
+     * Legacy multi-dog list, originally web; also written by native when a user has 2+ dogs.
+     * Element shape `{id, name, breed, size}` is load-bearing: web `getDogs()` drops elements
+     * lacking a string id + name. Server caps the list at 10 elements.
      */
     val dogs: List<DogListEntry>? = null,
 
@@ -78,7 +79,7 @@ data class UserRecord (
  */
 data class Dog (
     val avatarUrl: String? = null,
-    val birthday: DogBirthday,
+    val birthday: DogBirthday? = null,
     val breed: String,
     val dob: String? = null,
     val name: String,

@@ -18,8 +18,9 @@ export interface UserRecord {
     displayName?:       string;
     dog?:               Dog;
     /**
-     * LEGACY web multi-dog list. Not written by native v1. Reconcile with singular `dog` in a
-     * future migration.
+     * Legacy multi-dog list, originally web; also written by native when a user has 2+ dogs.
+     * Element shape `{id, name, breed, size}` is load-bearing: web `getDogs()` drops elements
+     * lacking a string id + name. Server caps the list at 10 elements.
      */
     dogs?:                  DogListEntry[];
     email?:                 string;
@@ -68,7 +69,7 @@ export interface UserRecord {
  */
 export interface Dog {
     avatarUrl?:         string;
-    birthday:           DogBirthday;
+    birthday?:          DogBirthday;
     breed:              string;
     dob?:               string;
     name:               string;
