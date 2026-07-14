@@ -1,4 +1,5 @@
 {
+  "$comment": "categoryKeys = full persisted category vocabulary (Category.name.lowercase(), native enum declaration order; order NON-SEMANTIC — persisted values are an unordered set). selectableCategoryKeys = the currently user-facing subset (4 reachable via onboarding/Me/Discover), in FilterCategory DISPLAY order — order IS meaningful (Me halo row + Discover filter bar render order). Expanding it is a one-line change here + consumer pin bumps. selectableCategoryKeys MUST be a subset of categoryKeys — build.mjs throws at generation time on drift. preferredCategories field-type tightening (user-record.schema.json) deferred until web value-parity is verified.",
   "categoryKeys": [
     "pubs",
     "parks",
@@ -8,6 +9,7 @@
     "beaches",
     "trails"
   ],
+  "selectableCategoryKeys": ["pubs", "cafes", "parks", "beaches"],
   "authProviders": ["google.com", "apple.com", "password", "unknown"],
   "themeModes": ["auto", "spring", "summer", "autumn", "winter"]
 }

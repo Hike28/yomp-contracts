@@ -2,5 +2,6 @@
 package dog.yomp.contracts
 
 val CATEGORY_KEYS: List<String> = listOf("pubs", "parks", "cafes", "stays", "enclosed", "beaches", "trails")
+val SELECTABLE_CATEGORY_KEYS: List<String> = listOf("pubs", "cafes", "parks", "beaches")
 val AUTH_PROVIDERS: List<String> = listOf("google.com", "apple.com", "password", "unknown")
 val THEME_MODES: List<String> = listOf("auto", "spring", "summer", "autumn", "winter")

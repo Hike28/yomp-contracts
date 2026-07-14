@@ -36,6 +36,10 @@ export const CLUSTER_POLICY: ClusterPolicy = {
 export const CATEGORY_KEYS = ["pubs", "parks", "cafes", "stays", "enclosed", "beaches", "trails"] as const;
 export type CategoryKey = (typeof CATEGORY_KEYS)[number];
 
+/** The currently user-facing category subset, in display order (⊆ CATEGORY_KEYS; see account.json). */
+export const SELECTABLE_CATEGORY_KEYS = ["pubs", "cafes", "parks", "beaches"] as const;
+export type SelectableCategoryKey = (typeof SELECTABLE_CATEGORY_KEYS)[number];
+
 export const AUTH_PROVIDERS = ["google.com", "apple.com", "password", "unknown"] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
