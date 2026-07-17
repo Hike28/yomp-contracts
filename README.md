@@ -64,3 +64,8 @@ git submodule add https://github.com/Hike28/yomp-contracts vendor/yomp-contracts
 Web imports from `build/ts/`; native sources `build/kotlin/common/` into `:shared` commonMain and
 `build/kotlin/android/` into androidMain (the latter carries the Firebase `Timestamp` typealias).
 (Wiring is done in the consuming repos, not here.)
+
+Because `yomp-android` consumes `build/kotlin/common/` as a Gradle source set, the generated Kotlin is
+subject to that repo's ktlint line-length rule. The generator therefore wraps the doc comments it
+emits from authored schema `description`s (e.g. the per-key semantics in `SavedPlaceKeys.kt`) at 100
+columns; keep that cap in mind when changing the emitter.

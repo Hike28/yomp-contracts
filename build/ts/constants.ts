@@ -130,5 +130,53 @@ export function savedPlaceDocId(uid: string, placeId: string): string {
   return `${uid}_${safeId(placeId)}`;
 }
 
-export const SAVED_PLACE_KEYS = ["uid", "placeId", "placeName", "placeType", "placeLat", "placeLng", "savedAt", "photoName", "rating"] as const;
+export const SAVED_PLACE_KEYS = [
+  /**
+   * Firebase Auth UID of the saving user. Equals request.auth.uid and the document id prefix.
+   */
+  "uid",
+  /**
+   * Firestore-safe form of the raw provider place id (safeId(rawId)). Equals the document id
+   * suffix. Stored as the safe form, never the raw id.
+   */
+  "placeId",
+  /**
+   * Venue display name captured at save time.
+   */
+  "placeName",
+  /**
+   * Raw provider primary-type string exactly as discovery returned it (Google Places New
+   * primaryType, or the DataForSEO type) - e.g. 'bar', 'park'. Open vocabulary; 'unknown' when
+   * absent. NOT a Yomp CategoryKey: consumers collapse this to a category at read time via
+   * getCategoryFromType(). Writing a category slug here appears to work for
+   * pubs/parks/cafes/beaches/trails via a substring fallback, but silently drops stays and enclosed
+   * into 'Other'.
+   */
+  "placeType",
+  /**
+   * Venue latitude, WGS84 decimal degrees, captured at save time.
+   */
+  "placeLat",
+  /**
+   * Venue longitude, WGS84 decimal degrees, captured at save time.
+   */
+  "placeLng",
+  /**
+   * Server timestamp written by the client SDK. Null locally while an optimistic write is pending -
+   * consumers must not read null as 'not saved'.
+   */
+  "savedAt",
+  /**
+   * Optional. First Google photo RESOURCE NAME (places/{placeId}/photos/{photoId}), for the
+   * /api/place-photo proxy. NOT a URL - a mainImage/googleusercontent URL cannot be used here.
+   * Omitted when unavailable, e.g. DataForSEO-sourced venues, which carry no Google photo name on
+   * any platform.
+   */
+  "photoName",
+  /**
+   * Optional. Google Places star rating (1-5) captured at save time. NOT the Yomp community paw
+   * average (deriveAverageRating). A client displaying both must write the Google value.
+   */
+  "rating",
+] as const;
 export type SavedPlaceKey = (typeof SAVED_PLACE_KEYS)[number];

@@ -95,3 +95,14 @@ test("SAVED_PLACE_KEYS is the schema's full property set — all 9, an allowlist
   // Proves the derivation is properties-based, not required-based (required omits the 2 optionals).
   assert.notDeepEqual([...SAVED_PLACE_KEYS], savedPlaceSchema.required);
 });
+
+test("every saved-place property carries a non-empty authored description (the point of this brick)", () => {
+  // The whole reason native had to guess placeType/rating/photoName is that a key shipped with its
+  // meaning recorded nowhere a consumer reads. This asserts the semantics exist AT SOURCE for every
+  // key, so the tenth key cannot arrive undocumented and reopen the gap silently.
+  for (const key of SCHEMA_PROPERTY_KEYS) {
+    const { description } = savedPlaceSchema.properties[key];
+    assert.equal(typeof description, "string", `saved-place property "${key}" is missing a description`);
+    assert.ok(description.trim().length > 0, `saved-place property "${key}" has an empty description`);
+  }
+});

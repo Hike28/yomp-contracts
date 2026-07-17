@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://contracts.yomp.dog/saved-place.schema.json",
   "title": "SavedPlace",
-  "description": "A user's saved place bookmark (Firestore collection `saved_places`, doc id = `uid + '_' + safeId(placeId)`). The stored `placeId` FIELD is the safeId form, matching the doc id; the deployed rule enforces `saveId == request.auth.uid + '_' + request.resource.data.placeId`. AUTHORED SOURCE OF TRUTH for the 9-key write allowlist (uid, placeId, placeName, placeType, placeLat, placeLng, savedAt, photoName, rating); photoName and rating are optional but permitted keys. NOTE ON TYPES: this schema is parsed for its property NAMES only (→ SAVED_PLACE_KEYS) and is deliberately NOT run through quicktype — no data class/interface is generated, because native reads these docs as raw Maps. So the field TYPES below are DOCUMENTATION ONLY: the keys are guarded by a test, but nothing consumes or validates these types today. `savedAt` is a Firestore server Timestamp written via serverTimestamp() (reads null client-side while the write is in flight); the deployed rules allowlist it but apply NO type or presence check to it — a known gap tracked in yomp-next's P1 rules bundle, deliberately NOT fixed here. Source of truth for yomp-next (TS), yomp-android (Kotlin) and a future iOS client.",
+  "description": "A user's saved place bookmark (Firestore collection `saved_places`, doc id = `uid + '_' + safeId(placeId)`). The stored `placeId` FIELD is the safeId form, matching the doc id; the deployed rule enforces `saveId == request.auth.uid + '_' + request.resource.data.placeId`. AUTHORED SOURCE OF TRUTH for the 9-key write allowlist (uid, placeId, placeName, placeType, placeLat, placeLng, savedAt, photoName, rating); photoName and rating are optional but permitted keys. NOTE ON TYPES: this schema is parsed for its property NAMES only (→ SAVED_PLACE_KEYS) and is deliberately NOT run through quicktype — no data class/interface is generated, because native reads these docs as raw Maps. So the field TYPES below are DOCUMENTATION ONLY: the keys are guarded by a test, but nothing consumes or validates these types today. `savedAt` is a Firestore server Timestamp written via serverTimestamp() (reads null client-side while the write is in flight); the deployed rules allowlist it but apply NO type or presence check to it — a known gap tracked in yomp-next's P1 rules bundle, deliberately NOT fixed here. Source of truth for yomp-next (TS), yomp-android (Kotlin) and a future iOS client. The per-property `description` fields below are the authored cross-platform field semantics for these keys (verified against yomp-next f13e0ce); like the field types they are documentation-only and unvalidated, but the generator emits each as a doc comment against its key in SAVED_PLACE_KEYS in both outputs so a writer sees the semantics at the point of use.",
   "type": "object",
   "definitions": {
     "Timestamp": {
@@ -12,15 +12,15 @@
     }
   },
   "properties": {
-    "uid": { "type": "string" },
-    "placeId": { "type": "string" },
-    "placeName": { "type": "string" },
-    "placeType": { "type": "string" },
-    "placeLat": { "type": "number" },
-    "placeLng": { "type": "number" },
-    "savedAt": { "$ref": "#/definitions/Timestamp" },
-    "photoName": { "type": "string" },
-    "rating": { "type": "number" }
+    "uid": { "type": "string", "description": "Firebase Auth UID of the saving user. Equals request.auth.uid and the document id prefix." },
+    "placeId": { "type": "string", "description": "Firestore-safe form of the raw provider place id (safeId(rawId)). Equals the document id suffix. Stored as the safe form, never the raw id." },
+    "placeName": { "type": "string", "description": "Venue display name captured at save time." },
+    "placeType": { "type": "string", "description": "Raw provider primary-type string exactly as discovery returned it (Google Places New primaryType, or the DataForSEO type) - e.g. 'bar', 'park'. Open vocabulary; 'unknown' when absent. NOT a Yomp CategoryKey: consumers collapse this to a category at read time via getCategoryFromType(). Writing a category slug here appears to work for pubs/parks/cafes/beaches/trails via a substring fallback, but silently drops stays and enclosed into 'Other'." },
+    "placeLat": { "type": "number", "description": "Venue latitude, WGS84 decimal degrees, captured at save time." },
+    "placeLng": { "type": "number", "description": "Venue longitude, WGS84 decimal degrees, captured at save time." },
+    "savedAt": { "$ref": "#/definitions/Timestamp", "description": "Server timestamp written by the client SDK. Null locally while an optimistic write is pending - consumers must not read null as 'not saved'." },
+    "photoName": { "type": "string", "description": "Optional. First Google photo RESOURCE NAME (places/{placeId}/photos/{photoId}), for the /api/place-photo proxy. NOT a URL - a mainImage/googleusercontent URL cannot be used here. Omitted when unavailable, e.g. DataForSEO-sourced venues, which carry no Google photo name on any platform." },
+    "rating": { "type": "number", "description": "Optional. Google Places star rating (1-5) captured at save time. NOT the Yomp community paw average (deriveAverageRating). A client displaying both must write the Google value." }
   },
   "required": ["uid", "placeId", "placeName", "placeType", "placeLat", "placeLng", "savedAt"],
   "additionalProperties": false
