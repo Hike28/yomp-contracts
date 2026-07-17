@@ -2,9 +2,14 @@
 
 export const STATUS = ["yes", "no", "check"] as const;
 export type Status = (typeof STATUS)[number];
+// NATIVE BRIDGE: yomp-android's DogStatus.UNKNOWN ↔ this list's third wire value 'check'.
+// The contract must not reference DogStatus (a native type) — documentation only, no code.
 
 export const ATTRIBUTE_KEYS = ["waterBowl", "insideAllowed", "offLead", "enclosedGarden", "treats", "dogMenu"] as const;
 export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
+
+/** Canonical display label per ATTRIBUTE_KEYS entry (matches web OwnerBlock ATTRIBUTE_LABELS). */
+export const ATTRIBUTE_LABELS: Record<AttributeKey, string> = { waterBowl: "Water bowl", insideAllowed: "Inside allowed", offLead: "Off-lead area", enclosedGarden: "Enclosed garden", treats: "Treats", dogMenu: "Dog menu" };
 
 export const MIN_COMMUNITY_VOTES = 3;
 export const HIGH_CONFIDENCE_VOTES = 10;
@@ -13,6 +18,54 @@ export const HIGH_CONFIDENCE_VOTES = 10;
 export const SAFE_ID_PATTERN = /[^a-zA-Z0-9_-]/g;
 export function safeId(id: string): string {
   return id.replace(SAFE_ID_PATTERN, "_");
+}
+
+// ── place_signals write-model — field names + numeric limits the deployed firestore.rules enforce ──
+export const SIGNAL_KEYS = ["uid", "placeId", "placeName", "placeType", "status", "attributes", "rating", "review", "createdAt", "updatedAt"] as const;
+export type SignalKey = (typeof SIGNAL_KEYS)[number];
+
+export const SIGNAL_PLACE_ID_MIN = 1;
+export const SIGNAL_PLACE_ID_MAX = 200;
+export const SIGNAL_PLACE_NAME_MIN = 1;
+export const SIGNAL_PLACE_NAME_MAX = 200;
+export const SIGNAL_PLACE_TYPE_MAX = 100;
+export const SIGNAL_RATING_MIN = 1;
+export const SIGNAL_RATING_MAX = 5;
+export const SIGNAL_REVIEW_MAX = 200;
+
+/**
+ * Firestore doc id for a place_signals write: `${uid}_${safeId(placeId)}`.
+ * SYNC — verified in yomp-next/src/lib/placeSignals.ts (saveSignal): the stored `placeId` FIELD is
+ * ALSO the safeId form, so doc id and field share it and the rule `signalId == uid+'_'+placeId` holds.
+ */
+export function signalDocId(uid: string, placeId: string): string {
+  return `${uid}_${safeId(placeId)}`;
+}
+
+// ── venue_reports write-model — reasons + deterministic composite doc id ──
+export const REPORT_REASONS = ["closed", "no_dogs", "wrong_location", "other"] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+/**
+ * Firestore doc id for a venue_reports write: `${uid}_${safeId(placeId)}_${reason}`.
+ * SYNC — yomp-next/src/components/place/ReportVenueSheet.tsx: the doc id uses the safeId form, but
+ * that component writes the RAW placeId into the field; they coincide only because current Google/OSM
+ * ids are already safeId-clean (see the firestore.rules venue_reports comment).
+ */
+export function reportDocId(uid: string, placeId: string, reason: string): string {
+  return `${uid}_${safeId(placeId)}_${reason}`;
+}
+
+// ── owner-published listing limits (firestore.rules venue_overrides) ──
+export const WELCOME_MESSAGE_MAX = 280;
+export const OWNER_PHOTO_MAX = 3;
+
+/**
+ * Rounds a raw average rating to nearest 0.1 (one decimal place).
+ * SYNC — yomp-next/src/lib/placeStats.ts deriveAverageRating: mirrors `Math.round(avg * 10) / 10`.
+ */
+export function roundRating(rating: number): number {
+  return Math.round(rating * 10) / 10;
 }
 
 export const MAP_CATEGORY_KEYS = ["pubs", "parks", "cafes", "stays", "enclosed", "beaches", "trails"] as const;

@@ -3,7 +3,12 @@ package dog.yomp.contracts
 
 object Community {
     val STATUS: List<String> = listOf("yes", "no", "check")
+    // NATIVE BRIDGE: yomp-android's DogStatus.UNKNOWN ↔ this list's third wire value 'check'.
+    // The contract must not reference DogStatus (a native type) — documentation only, no code.
     val ATTRIBUTE_KEYS: List<String> = listOf("waterBowl", "insideAllowed", "offLead", "enclosedGarden", "treats", "dogMenu")
+
+    /** Canonical display label per ATTRIBUTE_KEYS entry (matches web OwnerBlock ATTRIBUTE_LABELS). */
+    val ATTRIBUTE_LABELS: Map<String, String> = mapOf("waterBowl" to "Water bowl", "insideAllowed" to "Inside allowed", "offLead" to "Off-lead area", "enclosedGarden" to "Enclosed garden", "treats" to "Treats", "dogMenu" to "Dog menu")
 
     const val MIN_COMMUNITY_VOTES: Int = 3
     const val HIGH_CONFIDENCE_VOTES: Int = 10
@@ -12,4 +17,44 @@ object Community {
     val SAFE_ID_REGEX: Regex = Regex("[^a-zA-Z0-9_-]")
 
     fun safeId(id: String): String = id.replace(SAFE_ID_REGEX, "_")
+
+    // ── place_signals write-model — field names + numeric limits the deployed firestore.rules enforce ──
+    val SIGNAL_KEYS: List<String> = listOf("uid", "placeId", "placeName", "placeType", "status", "attributes", "rating", "review", "createdAt", "updatedAt")
+
+    const val SIGNAL_PLACE_ID_MIN: Int = 1
+    const val SIGNAL_PLACE_ID_MAX: Int = 200
+    const val SIGNAL_PLACE_NAME_MIN: Int = 1
+    const val SIGNAL_PLACE_NAME_MAX: Int = 200
+    const val SIGNAL_PLACE_TYPE_MAX: Int = 100
+    const val SIGNAL_RATING_MIN: Int = 1
+    const val SIGNAL_RATING_MAX: Int = 5
+    const val SIGNAL_REVIEW_MAX: Int = 200
+
+    /**
+     * Firestore doc id for a place_signals write: "${uid}_${safeId(placeId)}".
+     * SYNC — verified in yomp-next/src/lib/placeSignals.ts (saveSignal): the stored placeId FIELD is
+     * ALSO the safeId form, so doc id and field share it and the rule signalId == uid+'_'+placeId holds.
+     */
+    fun signalDocId(uid: String, placeId: String): String = "${uid}_${safeId(placeId)}"
+
+    // ── venue_reports write-model — reasons + deterministic composite doc id ──
+    val REPORT_REASONS: List<String> = listOf("closed", "no_dogs", "wrong_location", "other")
+
+    /**
+     * Firestore doc id for a venue_reports write: "${uid}_${safeId(placeId)}_${reason}".
+     * SYNC — yomp-next/src/components/place/ReportVenueSheet.tsx: the doc id uses the safeId form, but
+     * that component writes the RAW placeId into the field; they coincide only because current Google/OSM
+     * ids are already safeId-clean (see the firestore.rules venue_reports comment).
+     */
+    fun reportDocId(uid: String, placeId: String, reason: String): String = "${uid}_${safeId(placeId)}_${reason}"
+
+    // ── owner-published listing limits (firestore.rules venue_overrides) ──
+    const val WELCOME_MESSAGE_MAX: Int = 280
+    const val OWNER_PHOTO_MAX: Int = 3
+
+    /**
+     * Rounds a raw average rating to nearest 0.1 (one decimal place).
+     * SYNC — yomp-next/src/lib/placeStats.ts deriveAverageRating: mirrors Math.round(avg * 10) / 10.
+     */
+    fun roundRating(rating: Double): Double = kotlin.math.round(rating * 10.0) / 10.0
 }

@@ -8,9 +8,44 @@
     "treats",
     "dogMenu"
   ],
+  "attributeLabels": {
+    "waterBowl": "Water bowl",
+    "insideAllowed": "Inside allowed",
+    "offLead": "Off-lead area",
+    "enclosedGarden": "Enclosed garden",
+    "treats": "Treats",
+    "dogMenu": "Dog menu"
+  },
   "thresholds": {
     "MIN_COMMUNITY_VOTES": 3,
     "HIGH_CONFIDENCE_VOTES": 10
   },
-  "safeIdPattern": "[^a-zA-Z0-9_-]"
+  "safeIdPattern": "[^a-zA-Z0-9_-]",
+  "signalKeys": [
+    "uid",
+    "placeId",
+    "placeName",
+    "placeType",
+    "status",
+    "attributes",
+    "rating",
+    "review",
+    "createdAt",
+    "updatedAt"
+  ],
+  "signalLimits": {
+    "PLACE_ID_MIN": 1,
+    "PLACE_ID_MAX": 200,
+    "PLACE_NAME_MIN": 1,
+    "PLACE_NAME_MAX": 200,
+    "PLACE_TYPE_MAX": 100,
+    "RATING_MIN": 1,
+    "RATING_MAX": 5,
+    "REVIEW_MAX": 200
+  },
+  "reportReasons": ["closed", "no_dogs", "wrong_location", "other"],
+  "ownerEdit": {
+    "WELCOME_MESSAGE_MAX": 280,
+    "OWNER_PHOTO_MAX": 3
+  }
 }
