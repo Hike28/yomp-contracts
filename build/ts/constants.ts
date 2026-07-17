@@ -101,3 +101,34 @@ export type ThemeMode = (typeof THEME_MODES)[number];
 
 export const USER_KEYS = ["uid", "displayName", "email", "photoURL", "provider", "createdAt", "lastSignIn", "updatedAt", "onboardingCompletedAt", "signInCount", "dog", "dogs", "preferredCategories", "seenPlaceIds", "themeMode", "marketingConsent", "acquisitionSource", "username", "usernameDisplay", "appVersion", "platform", "role"] as const;
 export type UserKey = (typeof USER_KEYS)[number];
+
+// ── saved_places write-model — field limits + doc id (deployed firestore.rules `saved_places`) ──
+// Personal bookmark data (a user's own saved list), kept separate from the community write-path.
+// Each *_MIN/_MAX caps the FIELD named in its comment, NOT the composite doc id — e.g.
+// SAVED_PLACE_ID_MAX caps the `placeId` field (whose safeId form is the doc-id suffix).
+export const SAVED_PLACES_COLLECTION = "saved_places";
+
+export const SAVED_PLACE_ID_MIN = 1; // placeId field, min length
+export const SAVED_PLACE_ID_MAX = 200; // placeId field, max length
+export const SAVED_PLACE_NAME_MIN = 1; // placeName field, min length
+export const SAVED_PLACE_NAME_MAX = 200; // placeName field, max length
+export const SAVED_PLACE_TYPE_MAX = 100; // placeType field, max length
+export const SAVED_PLACE_PHOTO_NAME_MAX = 500; // photoName field, max length
+export const SAVED_PLACE_LAT_MIN = -90; // placeLat field
+export const SAVED_PLACE_LAT_MAX = 90; // placeLat field
+export const SAVED_PLACE_LNG_MIN = -180; // placeLng field
+export const SAVED_PLACE_LNG_MAX = 180; // placeLng field
+export const SAVED_PLACE_RATING_MIN = 1; // rating field
+export const SAVED_PLACE_RATING_MAX = 5; // rating field
+
+/**
+ * Firestore doc id for a saved_places write: `${uid}_${safeId(placeId)}`.
+ * Reuses safeId (above) — the deployed rule enforces `saveId == uid + '_' + placeId` where the
+ * stored placeId FIELD is the safeId form, so the doc id and the field share the sanitised value.
+ */
+export function savedPlaceDocId(uid: string, placeId: string): string {
+  return `${uid}_${safeId(placeId)}`;
+}
+
+export const SAVED_PLACE_KEYS = ["uid", "placeId", "placeName", "placeType", "placeLat", "placeLng", "savedAt", "photoName", "rating"] as const;
+export type SavedPlaceKey = (typeof SAVED_PLACE_KEYS)[number];

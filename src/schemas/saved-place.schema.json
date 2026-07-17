@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contracts.yomp.dog/saved-place.schema.json",
+  "title": "SavedPlace",
+  "description": "A user's saved place bookmark (Firestore collection `saved_places`, doc id = `uid + '_' + safeId(placeId)`). The stored `placeId` FIELD is the safeId form, matching the doc id; the deployed rule enforces `saveId == request.auth.uid + '_' + request.resource.data.placeId`. AUTHORED SOURCE OF TRUTH for the 9-key write allowlist (uid, placeId, placeName, placeType, placeLat, placeLng, savedAt, photoName, rating); photoName and rating are optional but permitted keys. NOTE ON TYPES: this schema is parsed for its property NAMES only (→ SAVED_PLACE_KEYS) and is deliberately NOT run through quicktype — no data class/interface is generated, because native reads these docs as raw Maps. So the field TYPES below are DOCUMENTATION ONLY: the keys are guarded by a test, but nothing consumes or validates these types today. `savedAt` is a Firestore server Timestamp written via serverTimestamp() (reads null client-side while the write is in flight); the deployed rules allowlist it but apply NO type or presence check to it — a known gap tracked in yomp-next's P1 rules bundle, deliberately NOT fixed here. Source of truth for yomp-next (TS), yomp-android (Kotlin) and a future iOS client.",
+  "type": "object",
+  "definitions": {
+    "Timestamp": {
+      "description": "Opaque Firestore server Timestamp (savedAt). Untyped in the neutral schema and not consumed anywhere, because this schema is parsed for keys only and never quicktyped.",
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "properties": {
+    "uid": { "type": "string" },
+    "placeId": { "type": "string" },
+    "placeName": { "type": "string" },
+    "placeType": { "type": "string" },
+    "placeLat": { "type": "number" },
+    "placeLng": { "type": "number" },
+    "savedAt": { "$ref": "#/definitions/Timestamp" },
+    "photoName": { "type": "string" },
+    "rating": { "type": "number" }
+  },
+  "required": ["uid", "placeId", "placeName", "placeType", "placeLat", "placeLng", "savedAt"],
+  "additionalProperties": false
+}

@@ -1,0 +1,18 @@
+{
+  "$comment": "saved_places write-model constants — personal bookmark data (a user's own saved list). Kept SEPARATE from community.json (the community write-path) so it is found by domain, not buried among SIGNAL_*/REPORT_REASONS. `collection` = the Firestore collection name. `limits` mirror the deployed firestore.rules for saved_places: placeId 1..200 chars, placeName 1..200 chars, placeType <=100 chars, photoName <=500 chars, placeLat -90..90, placeLng -180..180, rating 1..5. Emitted with the SAVED_PLACE_ domain prefix; each limit caps the FIELD it names, not the composite doc id.",
+  "collection": "saved_places",
+  "limits": {
+    "ID_MIN": 1,
+    "ID_MAX": 200,
+    "NAME_MIN": 1,
+    "NAME_MAX": 200,
+    "TYPE_MAX": 100,
+    "PHOTO_NAME_MAX": 500,
+    "LAT_MIN": -90,
+    "LAT_MAX": 90,
+    "LNG_MIN": -180,
+    "LNG_MAX": 180,
+    "RATING_MIN": 1,
+    "RATING_MAX": 5
+  }
+}
