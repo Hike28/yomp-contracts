@@ -27,6 +27,13 @@ codegen themselves.
 - **Core community constants** (`build/ts/constants.ts`, `build/kotlin/common/Community.kt`):
   `STATUS` (`yes`/`no`/`check`), the six `ATTRIBUTE_KEYS`, `MIN_COMMUNITY_VOTES` (3),
   `HIGH_CONFIDENCE_VOTES` (10), and `safeId()` (the Firestore doc-id sanitiser).
+- **The dog-verdict rule** (`deriveDogVerdict` in `build/ts/constants.ts`;
+  `DogVerdict.derive` in `build/kotlin/common/DogVerdict.kt`): the shared community verdict —
+  yes/no/check from the directional (yes + no) majority, gated at `MIN_COMMUNITY_VOTES` with an
+  explicit `insufficient` state below it; check votes never gate or decide; `HIGH_CONFIDENCE_VOTES`
+  sets a confidence label only, never the verdict. This is the repo's first *behavioural* contract:
+  the logic is authored once per language as templates in `build.mjs` (§9) with values injected
+  from `community.json`, and guarded fail-fast (thresholds + status vocabulary) before any emission.
 
 `lastUpdated` is a Firestore server Timestamp — bound to each platform's **native SDK type**, but
 the two outputs diverge by design so each matches how that platform actually writes/reads the field:

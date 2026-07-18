@@ -180,3 +180,54 @@ export const SAVED_PLACE_KEYS = [
   "rating",
 ] as const;
 export type SavedPlaceKey = (typeof SAVED_PLACE_KEYS)[number];
+
+// ── The dog-verdict rule (I-2-0) — the shared community verdict logic ──
+
+/** The verdict vocabulary: every wire status plus the below-gate "insufficient" sentinel. */
+export type DogVerdictStatus = Status | "insufficient";
+
+export interface DogVerdict {
+  /** "yes" | "no" | "check" from the directional majority, or "insufficient" below the vote gate. */
+  status: DogVerdictStatus;
+  /**
+   * "high" when totalVotes >= HIGH_CONFIDENCE_VOTES, else "medium". A LABEL ONLY — the
+   * high-confidence tier never changes the verdict. Null iff status === "insufficient".
+   */
+  confidence: "high" | "medium" | null;
+  /**
+   * confirmationCount + negativeCount — DIRECTIONAL votes only; checkCount is excluded. This one
+   * sum feeds BOTH the MIN_COMMUNITY_VOTES gate and the HIGH_CONFIDENCE_VOTES confidence tier.
+   */
+  totalVotes: number;
+}
+
+/**
+ * The shared community dog-verdict rule (I-2-0, decided 18 Jul 2026) — the ONE derivation of a
+ * place's yes/no/check status from its place_stats counters, shared verbatim by web and native
+ * (Kotlin twin: build/kotlin/common/DogVerdict.kt DogVerdict.derive). Encodes web's live logic
+ * (yomp-next src/lib/placeStats.ts deriveDogStatus) gated by MIN_COMMUNITY_VOTES:
+ *
+ * - Gate: fewer than MIN_COMMUNITY_VOTES directional votes (yes + no) → "insufficient",
+ *   confidence null — never a confident verdict. The consumer applies its own fallback (web:
+ *   Google allowsDogs); fallbacks stay OUT of this contract.
+ * - Verdict: yes > no → "yes"; no > yes → "no"; tie → "check" (community disagrees —
+ *   matches live web's tie behaviour, rendered "Check first").
+ * - checkCount NEVER gates or decides; it is accepted so call sites pass the full counter
+ *   triple, and is recorded only as place_stats.checkCount. Principle (Tom, 18 Jul 2026): check
+ *   votes never gate or downgrade; welcome persists until contrary directional votes.
+ * - Confidence: totalVotes >= HIGH_CONFIDENCE_VOTES → "high", else "medium" — a label only.
+ */
+export function deriveDogVerdict(
+  confirmationCount: number,
+  negativeCount: number,
+  checkCount: number,
+): DogVerdict {
+  const totalVotes = confirmationCount + negativeCount;
+  if (totalVotes < MIN_COMMUNITY_VOTES) {
+    return { status: "insufficient", confidence: null, totalVotes };
+  }
+  const status: DogVerdictStatus =
+    confirmationCount > negativeCount ? "yes" : negativeCount > confirmationCount ? "no" : "check";
+  const confidence = totalVotes >= HIGH_CONFIDENCE_VOTES ? "high" : "medium";
+  return { status, confidence, totalVotes };
+}

@@ -45,6 +45,33 @@ for (const k of savedPlaceKeys) {
   }
 }
 
+// ── Verdict-rule guard (fail-fast, BEFORE any file is written) ─────────────────
+// community.json is read HERE (not at §3) so the I-2-0 verdict emission (§9) is guarded before §1
+// writes anything. The authored deriveDogVerdict logic hard-encodes two assumptions; if either
+// breaks, fail RED and emit NOTHING rather than a silently divergent verdict contract:
+//   1. thresholds are positive integers with MIN <= HIGH — the directional gate and the
+//      confidence tier both key off them;
+//   2. the wire status vocabulary is exactly ["yes", "no", "check"] — the verdict branches and the
+//      reserved below-gate sentinel "insufficient" are authored around it. Any vocabulary change
+//      must update the §9 logic templates in the same commit.
+const community = JSON.parse(readFileSync(join(ROOT, "src", "constants", "community.json"), "utf8"));
+{
+  const { MIN_COMMUNITY_VOTES: minV, HIGH_CONFIDENCE_VOTES: highV } = community.thresholds;
+  if (!Number.isInteger(minV) || !Number.isInteger(highV) || minV < 1 || highV < minV) {
+    throw new Error(
+      `community.json: thresholds must be integers with 1 <= MIN_COMMUNITY_VOTES <= HIGH_CONFIDENCE_VOTES ` +
+        `(got MIN=${minV}, HIGH=${highV}).`,
+    );
+  }
+  if (JSON.stringify(community.status) !== JSON.stringify(["yes", "no", "check"])) {
+    throw new Error(
+      `community.json: status must be exactly ["yes","no","check"] — the authored deriveDogVerdict ` +
+        `logic (§9) branches on this vocabulary and reserves "insufficient" as its below-gate ` +
+        `sentinel. Update the §9 templates with any change. Got ${JSON.stringify(community.status)}.`,
+    );
+  }
+}
+
 const SCHEMA = join(ROOT, "src", "schemas", "place-stats.schema.json");
 
 // ── 1. Shapes via quicktype ────────────────────────────────────────────────
@@ -160,7 +187,7 @@ aliasTimestampsTs(userTsOut, USER_TIMESTAMP_FIELDS);
 aliasTimestampsKotlin(userKtOut, USER_TIMESTAMP_FIELDS);
 
 // ── 3. Constants codegen ────────────────────────────────────────────────────
-const community = JSON.parse(readFileSync(join(ROOT, "src", "constants", "community.json"), "utf8"));
+// (community.json was read and guard-validated at the top of this script.)
 const { status, attributeKeys, attributeLabels, thresholds, safeIdPattern } = community;
 const { signalKeys, signalLimits, reportReasons, ownerEdit } = community;
 
@@ -571,5 +598,137 @@ ${ktSavedPlaceKeyEntries}
 )
 `;
 writeFileSync(join(KT_COMMON_DIR, "SavedPlaceKeys.kt"), ktSavedPlaceKeys);
+
+// ── 9. Dog-verdict rule codegen (I-2-0) ──────────────────────────────────────
+// The shared community verdict LOGIC — the first behavioural contract (not just constants/shapes).
+// Authored once per language below; the yes/no/check literals are INJECTED from community.json's
+// status vocabulary (guard-validated at the top of this script), never retyped. "insufficient" is
+// the reserved below-gate sentinel (the guard proves it cannot collide with a wire status).
+// Decision provenance: Decisions DB 18 Jul 2026 — directional-only gate (Tom's Option B).
+const [S_YES, S_NO, S_CHECK] = community.status;
+const S_INSUFFICIENT = "insufficient";
+const q = (v) => JSON.stringify(v);
+
+// TS lands in constants.ts (the single aggregation file every other constants section appends to —
+// and where MIN_COMMUNITY_VOTES / HIGH_CONFIDENCE_VOTES / Status already live in-file, so the rule
+// needs no runtime cross-file import: Node's type-stripping test runner and web's bundler both just
+// work). Kotlin gets its own DogVerdict.kt per the one-source-per-file convention — the SavedPlaces
+// split, exactly.
+const tsDogVerdict = `
+// ── The dog-verdict rule (I-2-0) — the shared community verdict logic ──
+
+/** The verdict vocabulary: every wire status plus the below-gate ${q(S_INSUFFICIENT)} sentinel. */
+export type DogVerdictStatus = Status | ${q(S_INSUFFICIENT)};
+
+export interface DogVerdict {
+  /** ${q(S_YES)} | ${q(S_NO)} | ${q(S_CHECK)} from the directional majority, or ${q(S_INSUFFICIENT)} below the vote gate. */
+  status: DogVerdictStatus;
+  /**
+   * "high" when totalVotes >= HIGH_CONFIDENCE_VOTES, else "medium". A LABEL ONLY — the
+   * high-confidence tier never changes the verdict. Null iff status === ${q(S_INSUFFICIENT)}.
+   */
+  confidence: "high" | "medium" | null;
+  /**
+   * confirmationCount + negativeCount — DIRECTIONAL votes only; checkCount is excluded. This one
+   * sum feeds BOTH the MIN_COMMUNITY_VOTES gate and the HIGH_CONFIDENCE_VOTES confidence tier.
+   */
+  totalVotes: number;
+}
+
+/**
+ * The shared community dog-verdict rule (I-2-0, decided 18 Jul 2026) — the ONE derivation of a
+ * place's yes/no/check status from its place_stats counters, shared verbatim by web and native
+ * (Kotlin twin: build/kotlin/common/DogVerdict.kt DogVerdict.derive). Encodes web's live logic
+ * (yomp-next src/lib/placeStats.ts deriveDogStatus) gated by MIN_COMMUNITY_VOTES:
+ *
+ * - Gate: fewer than MIN_COMMUNITY_VOTES directional votes (yes + no) → ${q(S_INSUFFICIENT)},
+ *   confidence null — never a confident verdict. The consumer applies its own fallback (web:
+ *   Google allowsDogs); fallbacks stay OUT of this contract.
+ * - Verdict: yes > no → ${q(S_YES)}; no > yes → ${q(S_NO)}; tie → ${q(S_CHECK)} (community disagrees —
+ *   matches live web's tie behaviour, rendered "Check first").
+ * - checkCount NEVER gates or decides; it is accepted so call sites pass the full counter
+ *   triple, and is recorded only as place_stats.checkCount. Principle (Tom, 18 Jul 2026): check
+ *   votes never gate or downgrade; welcome persists until contrary directional votes.
+ * - Confidence: totalVotes >= HIGH_CONFIDENCE_VOTES → "high", else "medium" — a label only.
+ */
+export function deriveDogVerdict(
+  confirmationCount: number,
+  negativeCount: number,
+  checkCount: number,
+): DogVerdict {
+  const totalVotes = confirmationCount + negativeCount;
+  if (totalVotes < MIN_COMMUNITY_VOTES) {
+    return { status: ${q(S_INSUFFICIENT)}, confidence: null, totalVotes };
+  }
+  const status: DogVerdictStatus =
+    confirmationCount > negativeCount ? ${q(S_YES)} : negativeCount > confirmationCount ? ${q(S_NO)} : ${q(S_CHECK)};
+  const confidence = totalVotes >= HIGH_CONFIDENCE_VOTES ? "high" : "medium";
+  return { status, confidence, totalVotes };
+}
+`;
+appendFileSync(join(TS_DIR, "constants.ts"), tsDogVerdict);
+
+const ktDogVerdict = `// AUTO-GENERATED by scripts/build.mjs from authored verdict logic + community.json. Do not edit.
+package ${KOTLIN_PACKAGE}
+
+/**
+ * The shared community dog-verdict rule (I-2-0, decided 18 Jul 2026) — the ONE derivation of a
+ * place's yes/no/check status from its place_stats counters, shared verbatim by web and native
+ * (TS twin: build/ts/constants.ts deriveDogVerdict). Encodes web's live combination logic
+ * (yomp-next src/lib/placeStats.ts deriveDogStatus) gated by Community.MIN_COMMUNITY_VOTES:
+ *
+ * - Gate: fewer than MIN_COMMUNITY_VOTES directional votes (yes + no) → INSUFFICIENT, confidence
+ *   null — never a confident verdict. The consumer applies its own fallback (web: Google
+ *   allowsDogs); fallbacks stay OUT of this contract.
+ * - Verdict: yes > no → YES; no > yes → NO; tie → CHECK (community disagrees — matches live
+ *   web's tie behaviour, rendered "Check first").
+ * - checkCount NEVER gates or decides; it is accepted so call sites pass the full counter
+ *   triple, and is recorded only as place_stats.checkCount. Principle (Tom, 18 Jul 2026): check
+ *   votes never gate or downgrade; welcome persists until contrary directional votes.
+ * - Confidence: totalVotes >= HIGH_CONFIDENCE_VOTES → CONFIDENCE_HIGH, else CONFIDENCE_MEDIUM —
+ *   a label only; the high-confidence tier never changes the verdict.
+ */
+object DogVerdict {
+    // Verdict statuses — the three wire values (Community.STATUS) plus the below-gate sentinel.
+    const val YES: String = ${q(S_YES)}
+    const val NO: String = ${q(S_NO)}
+    const val CHECK: String = ${q(S_CHECK)}
+    const val INSUFFICIENT: String = ${q(S_INSUFFICIENT)}
+
+    const val CONFIDENCE_HIGH: String = "high"
+    const val CONFIDENCE_MEDIUM: String = "medium"
+
+    data class Verdict(
+        /** YES | NO | CHECK from the directional majority, or INSUFFICIENT below the vote gate. */
+        val status: String,
+        /**
+         * CONFIDENCE_HIGH when totalVotes >= Community.HIGH_CONFIDENCE_VOTES, else
+         * CONFIDENCE_MEDIUM. A label only — never changes the verdict. Null iff INSUFFICIENT.
+         */
+        val confidence: String?,
+        /**
+         * confirmationCount + negativeCount — DIRECTIONAL votes only; checkCount is excluded.
+         * This one sum feeds BOTH the MIN_COMMUNITY_VOTES gate and the HIGH_CONFIDENCE_VOTES
+         * confidence tier.
+         */
+        val totalVotes: Int,
+    )
+
+    fun derive(confirmationCount: Int, negativeCount: Int, checkCount: Int): Verdict {
+        val totalVotes = confirmationCount + negativeCount
+        if (totalVotes < Community.MIN_COMMUNITY_VOTES) {
+            return Verdict(INSUFFICIENT, null, totalVotes)
+        }
+        val status = when {
+            confirmationCount > negativeCount -> YES
+            negativeCount > confirmationCount -> NO
+            else -> CHECK
+        }
+        val high = totalVotes >= Community.HIGH_CONFIDENCE_VOTES
+        return Verdict(status, if (high) CONFIDENCE_HIGH else CONFIDENCE_MEDIUM, totalVotes)
+    }
+}
+`;
+writeFileSync(join(KT_COMMON_DIR, "DogVerdict.kt"), ktDogVerdict);
 
 console.log("✔ build complete — build/ts + build/kotlin");
