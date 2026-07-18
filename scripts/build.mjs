@@ -34,7 +34,7 @@ mkdirSync(KT_ANDROID_DIR, { recursive: true });
 // broken comment or `undefined` placeholder into a contract three platforms read. Fail; never strip.
 const savedPlaceSchema = JSON.parse(readFileSync(join(ROOT, "src", "schemas", "saved-place.schema.json"), "utf8"));
 const savedPlaceKeys = Object.keys(savedPlaceSchema.properties);
-const SAVED_PLACE_COMMENT_TERMINATOR = "*" + "/";
+const SAVED_PLACE_COMMENT_TERMINATOR = "*/";
 for (const k of savedPlaceKeys) {
   const d = savedPlaceSchema.properties[k].description;
   if (typeof d !== "string" || d.trim() === "") {
