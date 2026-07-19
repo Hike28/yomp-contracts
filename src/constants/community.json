@@ -44,6 +44,18 @@
     "REVIEW_MAX": 200
   },
   "reportReasons": ["closed", "no_dogs", "wrong_location", "other"],
+  "reportReasonLabels": {
+    "closed": "Permanently closed",
+    "no_dogs": "Dogs aren't allowed",
+    "wrong_location": "Wrong location",
+    "other": "Something else"
+  },
+  "reportReasonDescriptions": {
+    "closed": "This venue has shut down",
+    "no_dogs": "The dog-friendly status is wrong",
+    "wrong_location": "The pin is in the wrong place",
+    "other": "Another issue with this venue listing"
+  },
   "ownerEdit": {
     "WELCOME_MESSAGE_MAX": 280,
     "OWNER_PHOTO_MAX": 3

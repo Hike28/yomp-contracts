@@ -41,6 +41,20 @@ object Community {
     val REPORT_REASONS: List<String> = listOf("closed", "no_dogs", "wrong_location", "other")
 
     /**
+     * Shared user-facing label per REPORT_REASONS key — the byte-for-byte copy web currently
+     * hand-codes in yomp-next ReportVenueSheet.tsx (adoption card filed to route web through this
+     * map). Keys exactly mirror REPORT_REASONS (build-guarded).
+     */
+    val REPORT_REASON_LABELS: Map<String, String> = mapOf("closed" to "Permanently closed", "no_dogs" to "Dogs aren't allowed", "wrong_location" to "Wrong location", "other" to "Something else")
+
+    /**
+     * Shared user-facing sub-copy per REPORT_REASONS key (the secondary line under each label) — the
+     * byte-for-byte copy web currently hand-codes in yomp-next ReportVenueSheet.tsx (adoption card
+     * filed). Keys exactly mirror REPORT_REASONS (build-guarded).
+     */
+    val REPORT_REASON_DESCRIPTIONS: Map<String, String> = mapOf("closed" to "This venue has shut down", "no_dogs" to "The dog-friendly status is wrong", "wrong_location" to "The pin is in the wrong place", "other" to "Another issue with this venue listing")
+
+    /**
      * Firestore doc id for a venue_reports write: "${uid}_${safeId(placeId)}_${reason}".
      * SYNC — yomp-next/src/components/place/ReportVenueSheet.tsx: the doc id uses the safeId form, but
      * that component writes the RAW placeId into the field; they coincide only because current Google/OSM

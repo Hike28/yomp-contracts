@@ -11,6 +11,8 @@ import {
   signalDocId,
   reportDocId,
   REPORT_REASONS,
+  REPORT_REASON_LABELS,
+  REPORT_REASON_DESCRIPTIONS,
   savedPlaceDocId,
   SAVED_PLACE_KEYS,
 } from "../build/ts/constants.ts";
@@ -57,6 +59,24 @@ test("reportDocId = `${uid}_${safeId(placeId)}_${reason}` for every REPORT_REASO
 
 test("REPORT_REASONS matches the deployed venue_reports rule set", () => {
   assert.deepEqual([...REPORT_REASONS], ["closed", "no_dogs", "wrong_location", "other"]);
+});
+
+test("REPORT_REASON_LABELS + DESCRIPTIONS key sets exactly mirror REPORT_REASONS (no missing, no extra)", () => {
+  // These maps are the shared user-facing copy for venue reports; each MUST carry exactly one entry
+  // per reason key — a missing key drops copy for a live reason, a stray key ships copy for a reason
+  // no rule accepts. Assert set equality (sorted, so order differences never mask a mismatch) for both.
+  const reasons = [...REPORT_REASONS].sort();
+  for (const [name, map] of [
+    ["REPORT_REASON_LABELS", REPORT_REASON_LABELS],
+    ["REPORT_REASON_DESCRIPTIONS", REPORT_REASON_DESCRIPTIONS],
+  ] as const) {
+    assert.deepEqual(Object.keys(map).sort(), reasons, `${name} keys must equal REPORT_REASONS exactly`);
+    for (const reason of REPORT_REASONS) {
+      const value = map[reason];
+      assert.equal(typeof value, "string", `${name}["${reason}"] must be a string`);
+      assert.ok(value.trim().length > 0, `${name}["${reason}"] must be a non-empty string`);
+    }
+  }
 });
 
 // ── saved_places write-model (this brick) ───────────────────────────────────────
