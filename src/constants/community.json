@@ -1,5 +1,6 @@
 {
   "status": ["yes", "no", "check"],
+  "dogStatus": ["yes", "no", "unknown"],
   "attributeKeys": [
     "waterBowl",
     "insideAllowed",

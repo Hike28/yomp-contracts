@@ -73,6 +73,44 @@ const community = JSON.parse(readFileSync(join(ROOT, "src", "constants", "commun
 }
 
 const SCHEMA = join(ROOT, "src", "schemas", "place-stats.schema.json");
+const PLACE_SCHEMA = join(ROOT, "src", "schemas", "place.schema.json");
+
+// ── dogStatus vocabulary guard (fail-fast, BEFORE any file is written) ────────
+// DOG_STATUS (yes|no|unknown) is the RESOLVED place-status vocabulary; STATUS (yes|no|check) is the
+// community-VOTE vocabulary. They share two of three values and differ on the third — precisely the
+// collision a future "tidy-up" would merge. Two things are asserted here, and either failing aborts
+// the build RED rather than emitting a contract whose constant and shape disagree:
+//   1. dogStatus is exactly ["yes","no","unknown"] — consumers switch on this vocabulary;
+//   2. community.json's dogStatus and place.schema.json's dogStatus enum are the SAME SET — the
+//      constant and the generated Place.dogStatus type must never drift apart.
+// It also proves DOG_STATUS !== STATUS, so the distinction can never be collapsed silently.
+const placeSchema = JSON.parse(readFileSync(PLACE_SCHEMA, "utf8"));
+{
+  const DOG_STATUS_EXPECTED = ["yes", "no", "unknown"];
+  if (JSON.stringify(community.dogStatus) !== JSON.stringify(DOG_STATUS_EXPECTED)) {
+    throw new Error(
+      `community.json: dogStatus must be exactly ${JSON.stringify(DOG_STATUS_EXPECTED)} — the resolved ` +
+        `place-status vocabulary, distinct from the community-vote status vocabulary. ` +
+        `Got ${JSON.stringify(community.dogStatus)}.`,
+    );
+  }
+  const schemaDogStatus = placeSchema.properties.dogStatus.enum;
+  const sorted = (a) => JSON.stringify([...a].sort());
+  if (sorted(schemaDogStatus) !== sorted(community.dogStatus)) {
+    throw new Error(
+      `place.schema.json: the dogStatus enum ${JSON.stringify(schemaDogStatus)} must match ` +
+        `community.json's dogStatus ${JSON.stringify(community.dogStatus)} exactly (as a set). ` +
+        `DOG_STATUS and the generated Place.dogStatus type are one vocabulary, authored twice.`,
+    );
+  }
+  if (sorted(community.dogStatus) === sorted(community.status)) {
+    throw new Error(
+      `community.json: dogStatus and status must remain DISTINCT vocabularies — dogStatus is the ` +
+        `resolved place status (yes|no|unknown), status is the community vote (yes|no|check). ` +
+        `They must not be merged.`,
+    );
+  }
+}
 
 // ── 1. Shapes via quicktype ────────────────────────────────────────────────
 function quicktype(args) {
@@ -186,9 +224,56 @@ function aliasTimestampsKotlin(file, fields) {
 aliasTimestampsTs(userTsOut, USER_TIMESTAMP_FIELDS);
 aliasTimestampsKotlin(userKtOut, USER_TIMESTAMP_FIELDS);
 
+// ── 2c. Place shape via quicktype ───────────────────────────────────────────
+// The venue shape the apps render (authored from yomp-next src/types/place.ts, field-for-field).
+// It carries NO Firestore Timestamp — pure stdlib — so its Kotlin output goes to common/ (KMP
+// commonMain-safe), unlike PlaceStats/UserRecord which are Firebase-bound → android/.
+//
+// --prefer-unions (TS only): quicktype's default for a schema `enum` is a TS `enum` declaration,
+// which would BREAK web — yomp-next compares `place.dogStatus === 'yes'` against a string union.
+// --prefer-unions emits `export type DogStatus = "yes" | "no" | "unknown"` in the schema's AUTHORED
+// order, identical to place.ts. --acronym-style original keeps field names verbatim (same reason as
+// the user record: they are wire keys, and quicktype's default would uppercase acronyms in Kotlin
+// only — the precise drift this repo exists to prevent).
+const placeTsOut = join(TS_DIR, "place.ts");
+const placeKtOut = join(KT_COMMON_DIR, "Place.kt");
+
+quicktype(`--src-lang schema --lang ts --just-types --prefer-unions --src "${PLACE_SCHEMA}" -o "${placeTsOut}"`);
+quicktype(`--src-lang schema --lang kotlin --framework just-types --acronym-style original --package ${KOTLIN_PACKAGE} --src "${PLACE_SCHEMA}" -o "${placeKtOut}"`);
+
+// Kotlin: rewrite every schema-`enum` field to plain String and drop the generated `enum class`
+// declarations. Deliberate, and the same principle account.json (§5) states for the key lists: an
+// out-of-vocabulary wire value must be FILTERABLE on read, never a deserialisation crash with no
+// enum slot to land in. The constraint still lives in place.schema.json and in Community.DOG_STATUS.
+// It also keeps generic names like `Tier` from being declared top-level in dog.yomp.contracts, where
+// yomp-android's :shared co-compiles every common/ file into one source set.
+//
+// The enum FIELDS and their generated type names are DERIVED from the schema (never hand-listed), so
+// adding a constrained field to place.schema.json needs no change here.
+const placeEnumFields = Object.keys(placeSchema.properties).filter((k) => Array.isArray(placeSchema.properties[k].enum));
+const pascal = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function stringifyEnumsKotlin(file, fields) {
+  let s = readFileSync(file, "utf8");
+  for (const f of fields) {
+    // Match only the TYPE token after the field name, so any `?` / ` = null` / trailing comma is
+    // preserved untouched (quicktype emits `val tier: Tier? = null,` and `val dogStatus: DogStatus,`).
+    s = s.replace(new RegExp(`(\\bval ${f}:\\s*)[A-Za-z0-9_]+`, "g"), "$1String");
+    // Drop the now-orphaned declaration for this field's generated enum type — INCLUDING the KDoc
+    // block quicktype emits above it, which would otherwise be left dangling at end of file with
+    // nothing to document. The comment body is matched as "no */ inside" rather than a lazy
+    // [\s\S]*?, so the optional group can only ever consume the ONE comment immediately preceding
+    // the enum (a lazy match can walk backwards across earlier comments and swallow the file).
+    s = s.replace(new RegExp(`(?:/\\*\\*(?:[^*]|\\*(?!/))*\\*/\\n)?enum class ${pascal(f)} \\{[\\s\\S]*?\\n\\}\\n?`, "g"), "");
+  }
+  writeFileSync(file, `${s.trimEnd()}\n`);
+}
+
+stringifyEnumsKotlin(placeKtOut, placeEnumFields);
+
 // ── 3. Constants codegen ────────────────────────────────────────────────────
 // (community.json was read and guard-validated at the top of this script.)
-const { status, attributeKeys, attributeLabels, thresholds, safeIdPattern } = community;
+const { status, dogStatus, attributeKeys, attributeLabels, thresholds, safeIdPattern } = community;
 const { signalKeys, signalLimits, reportReasons, ownerEdit } = community;
 const { reportReasonLabels, reportReasonDescriptions } = community;
 
@@ -242,6 +327,19 @@ export const STATUS = [${tsList(status)}] as const;
 export type Status = (typeof STATUS)[number];
 // NATIVE BRIDGE: yomp-android's DogStatus.UNKNOWN ↔ this list's third wire value 'check'.
 // The contract must not reference DogStatus (a native type) — documentation only, no code.
+
+/**
+ * STATUS (yes|no|check) is the community-VOTE vocabulary; DOG_STATUS (yes|no|unknown) is the
+ * resolved place-status vocabulary — they are intentionally distinct, do not merge them.
+ *
+ * STATUS is what a user taps when they vote. DOG_STATUS is what the app renders after resolution
+ * (see place.schema.json Place.dogStatus, whose enum is build-guarded to equal this list). The two
+ * agree on "yes"/"no" and diverge on the third value: a vote of "check" means the community
+ * disagrees, whereas "unknown" means no answer has been resolved at all. Collapsing them would
+ * silently turn "we disagree" into "we don't know".
+ */
+export const DOG_STATUS = [${tsList(dogStatus)}] as const;
+export type DogStatus = (typeof DOG_STATUS)[number];
 
 export const ATTRIBUTE_KEYS = [${tsList(attributeKeys)}] as const;
 export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
@@ -329,6 +427,19 @@ object Community {
     val STATUS: List<String> = listOf(${ktList(status)})
     // NATIVE BRIDGE: yomp-android's DogStatus.UNKNOWN ↔ this list's third wire value 'check'.
     // The contract must not reference DogStatus (a native type) — documentation only, no code.
+
+    /**
+     * STATUS (yes|no|check) is the community-VOTE vocabulary; DOG_STATUS (yes|no|unknown) is the
+     * resolved place-status vocabulary — they are intentionally distinct, do not merge them.
+     *
+     * STATUS is what a user taps when they vote. DOG_STATUS is what the app renders after
+     * resolution (see place.schema.json Place.dogStatus, whose enum is build-guarded to equal this
+     * list). The two agree on "yes"/"no" and diverge on the third value: a vote of "check" means
+     * the community disagrees, whereas "unknown" means no answer has been resolved at all.
+     * Collapsing them would silently turn "we disagree" into "we don't know".
+     */
+    val DOG_STATUS: List<String> = listOf(${ktList(dogStatus)})
+
     val ATTRIBUTE_KEYS: List<String> = listOf(${ktList(attributeKeys)})
 
     /** Canonical display label per ATTRIBUTE_KEYS entry (matches web OwnerBlock ATTRIBUTE_LABELS). */

@@ -5,6 +5,19 @@ export type Status = (typeof STATUS)[number];
 // NATIVE BRIDGE: yomp-android's DogStatus.UNKNOWN ↔ this list's third wire value 'check'.
 // The contract must not reference DogStatus (a native type) — documentation only, no code.
 
+/**
+ * STATUS (yes|no|check) is the community-VOTE vocabulary; DOG_STATUS (yes|no|unknown) is the
+ * resolved place-status vocabulary — they are intentionally distinct, do not merge them.
+ *
+ * STATUS is what a user taps when they vote. DOG_STATUS is what the app renders after resolution
+ * (see place.schema.json Place.dogStatus, whose enum is build-guarded to equal this list). The two
+ * agree on "yes"/"no" and diverge on the third value: a vote of "check" means the community
+ * disagrees, whereas "unknown" means no answer has been resolved at all. Collapsing them would
+ * silently turn "we disagree" into "we don't know".
+ */
+export const DOG_STATUS = ["yes", "no", "unknown"] as const;
+export type DogStatus = (typeof DOG_STATUS)[number];
+
 export const ATTRIBUTE_KEYS = ["waterBowl", "insideAllowed", "offLead", "enclosedGarden", "treats", "dogMenu"] as const;
 export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
 
