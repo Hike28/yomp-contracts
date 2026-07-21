@@ -6,12 +6,15 @@
   "description": "Neutral source of truth for Yomp's Firestore data contracts. One JSON Schema + constants source generates TypeScript types (web) and Kotlin data classes (native), consumed by yomp-next and yomp-android as a git submodule.",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:gazetteer": "node scripts/build-gazetteer.mjs",
     "verify": "tsc --noEmit",
     "test": "node --test"
   },
   "license": "ISC",
   "devDependencies": {
+    "adm-zip": "^0.5.16",
     "firebase": "^12.15.0",
+    "proj4": "^2.20.9",
     "quicktype": "^23.0.0",
     "typescript": "^5.6.0"
   }

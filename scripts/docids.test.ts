@@ -116,6 +116,79 @@ test("SAVED_PLACE_KEYS is the schema's full property set — all 9, an allowlist
   assert.notDeepEqual([...SAVED_PLACE_KEYS], savedPlaceSchema.required);
 });
 
+// ── GB place gazetteer (data/gb-places.json) ────────────────────────────────────
+// Committed DATA, not codegen — read straight off disk, exactly as a consumer reads it.
+
+const GAZETTEER_TYPES = ["city", "town", "village", "hamlet", "suburb", "settlement"];
+// GB bounding box — the same gate scripts/build-gazetteer.mjs applies at emission.
+const GB_BOUNDS = { minLat: 49.8, maxLat: 61.0, minLng: -8.7, maxLng: 2.0 };
+
+const gazetteer = JSON.parse(
+  readFileSync(new URL("../data/gb-places.json", import.meta.url), "utf8"),
+);
+
+test("gazetteer parses as an array of more than 10000 entries", () => {
+  assert.ok(Array.isArray(gazetteer), "data/gb-places.json must be a JSON array");
+  assert.ok(
+    gazetteer.length > 10000,
+    `expected > 10000 populated places, got ${gazetteer.length}`,
+  );
+});
+
+test("every gazetteer entry has a non-empty name, a known type, and in-bounds GB coordinates", () => {
+  // Asserted over ALL entries, not a sample: a single bad row is a pin dropped in the sea
+  // (or a place silently unreachable by search), and it must fail here rather than ship.
+  for (const entry of gazetteer) {
+    const where = `entry ${JSON.stringify(entry)}`;
+    assert.equal(typeof entry.name, "string", `${where}: name must be a string`);
+    assert.ok(entry.name.trim().length > 0, `${where}: name must be non-empty`);
+    assert.ok(GAZETTEER_TYPES.includes(entry.type), `${where}: unknown type "${entry.type}"`);
+    for (const axis of ["lat", "lng"] as const) {
+      assert.equal(typeof entry[axis], "number", `${where}: ${axis} must be a number`);
+      assert.ok(Number.isFinite(entry[axis]), `${where}: ${axis} must be finite`);
+    }
+    assert.ok(
+      entry.lat >= GB_BOUNDS.minLat && entry.lat <= GB_BOUNDS.maxLat,
+      `${where}: lat outside GB bounds`,
+    );
+    assert.ok(
+      entry.lng >= GB_BOUNDS.minLng && entry.lng <= GB_BOUNDS.maxLng,
+      `${where}: lng outside GB bounds`,
+    );
+  }
+});
+
+test("gazetteer is stored in the documented total order (name, type, lat, lng)", () => {
+  // This is what actually PROTECTS determinism in CI — proving the two local runs matched
+  // says nothing about the next machine. Codepoint comparison, matching the generator:
+  // locale collation varies with Node's ICU build and would reorder the whole file.
+  const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const resorted = [...gazetteer].sort(
+    (a, b) => cmp(a.name, b.name) || cmp(a.type, b.type) || a.lat - b.lat || a.lng - b.lng,
+  );
+  assert.deepEqual(resorted, gazetteer, "re-sorting the gazetteer must be a no-op");
+});
+
+test("gazetteer keeps duplicate place names — they are distinct places, not dirty data", () => {
+  // The same name recurs across GB many times over ("Newtown" ~90x). Consumers must never
+  // assume name-uniqueness, so assert the collisions are actually PRESENT: a future
+  // well-meaning dedupe would delete real villages and this test would catch it.
+  const counts = new Map<string, number>();
+  for (const entry of gazetteer) counts.set(entry.name, (counts.get(entry.name) ?? 0) + 1);
+  assert.ok(counts.size < gazetteer.length, "expected duplicate names to be retained");
+  assert.ok((counts.get("Newtown") ?? 0) > 1, "Newtown must appear more than once");
+});
+
+test("gazetteer contains Dover as a town at its known real-world position", () => {
+  // Ground-truth anchor: Dover is ~51.13 N, ~1.31 E. Proves the BNG -> WGS84 conversion
+  // is right way round and correctly datum-shifted, not merely self-consistent.
+  const dover = gazetteer.filter((e: { name: string }) => e.name === "Dover");
+  assert.equal(dover.length, 1, "expected exactly one Dover");
+  assert.equal(dover[0].type, "town");
+  assert.ok(Math.abs(dover[0].lat - 51.13) < 0.02, `Dover lat was ${dover[0].lat}`);
+  assert.ok(Math.abs(dover[0].lng - 1.31) < 0.02, `Dover lng was ${dover[0].lng}`);
+});
+
 test("every saved-place property carries a non-empty authored description (the point of this brick)", () => {
   // The whole reason native had to guess placeType/rating/photoName is that a key shipped with its
   // meaning recorded nowhere a consumer reads. This asserts the semantics exist AT SOURCE for every

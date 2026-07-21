@@ -1,3 +1,7 @@
 # Dependencies only. Generated outputs in build/ are COMMITTED — consumers read
 # them via git submodule and never run codegen. Do NOT ignore build/.
 node_modules/
+
+# Raw OS Open Names archive downloaded by scripts/build-gazetteer.mjs (~98 MiB).
+# Build-time input only — the COMMITTED output is data/gb-places.json.
+.cache/
