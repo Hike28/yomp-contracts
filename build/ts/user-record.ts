@@ -13,10 +13,15 @@ export interface UserRecord {
      * Opaque acquisition/attribution payload — shape intentionally unconstrained.
      */
     acquisitionSource?: { [key: string]: any };
-    appVersion?:        string;
+    /**
+     * User consent for product analytics. Absent = never asked; true = opted in; false = opted
+     * out (including sheet dismissal).
+     */
+    analyticsConsent?: boolean;
+    appVersion?:       string;
     createdAt?: Timestamp | FieldValue | null;
-    displayName?:       string;
-    dog?:               Dog;
+    displayName?:      string;
+    dog?:              Dog;
     /**
      * Legacy multi-dog list, originally web; also written by native when a user has 2+ dogs.
      * Element shape `{id, name, breed, size}` is load-bearing: web `getDogs()` drops elements

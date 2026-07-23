@@ -87,6 +87,10 @@
       "type": "string"
     },
     "marketingConsent": { "type": "boolean" },
+    "analyticsConsent": {
+      "description": "User consent for product analytics. Absent = never asked; true = opted in; false = opted out (including sheet dismissal).",
+      "type": "boolean"
+    },
     "acquisitionSource": {
       "description": "Opaque acquisition/attribution payload — shape intentionally unconstrained.",
       "type": "object",

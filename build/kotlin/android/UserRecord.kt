@@ -14,6 +14,12 @@ data class UserRecord (
      */
     val acquisitionSource: Map<String, Any?>? = null,
 
+    /**
+     * User consent for product analytics. Absent = never asked; true = opted in; false = opted
+     * out (including sheet dismissal).
+     */
+    val analyticsConsent: Boolean? = null,
+
     val appVersion: String? = null,
     val createdAt: com.google.firebase.Timestamp? = null,
     val displayName: String? = null,

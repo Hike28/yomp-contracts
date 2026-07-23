@@ -126,7 +126,7 @@ export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 export const THEME_MODES = ["auto", "spring", "summer", "autumn", "winter"] as const;
 export type ThemeMode = (typeof THEME_MODES)[number];
 
-export const USER_KEYS = ["uid", "displayName", "email", "photoURL", "provider", "createdAt", "lastSignIn", "updatedAt", "onboardingCompletedAt", "signInCount", "dog", "dogs", "preferredCategories", "seenPlaceIds", "themeMode", "marketingConsent", "acquisitionSource", "username", "usernameDisplay", "appVersion", "platform", "role"] as const;
+export const USER_KEYS = ["uid", "displayName", "email", "photoURL", "provider", "createdAt", "lastSignIn", "updatedAt", "onboardingCompletedAt", "signInCount", "dog", "dogs", "preferredCategories", "seenPlaceIds", "themeMode", "marketingConsent", "analyticsConsent", "acquisitionSource", "username", "usernameDisplay", "appVersion", "platform", "role"] as const;
 export type UserKey = (typeof USER_KEYS)[number];
 
 // ── saved_places write-model — field limits + doc id (deployed firestore.rules `saved_places`) ──
