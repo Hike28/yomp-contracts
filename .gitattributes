@@ -1,0 +1,6 @@
+# Generated outputs and data must be byte-identical on every platform, so the
+# CI "generated files are up to date" check compares like with like. Without this,
+# a Windows checkout with core.autocrlf=true holds CRLF files while build.mjs writes LF.
+* text=auto eol=lf
+build/** text eol=lf
+data/*.json text eol=lf
