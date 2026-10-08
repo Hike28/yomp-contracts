@@ -11,12 +11,19 @@
 // release is compared with the release before it, never with itself. Every src/schemas/*.schema.json
 // and src/constants/*.json at that tag is compared with the working tree. Pure additions pass.
 //
-// HARD (exit 1; only a REMOVAL can be excused, by a matured deprecations.json entry at the baseline):
-//   schema file removed · property removed · type narrowed or lost · enum value removed ·
+// Scope: the authored sources only (src/schemas, src/constants). build/ is generated from them and is
+// protected by CI's generated-files-up-to-date step; a scripts/build.mjs change that alters generated
+// names or types without a schema edit is NOT covered here.
+//
+// HARD (exit 1; only a REMOVAL can be excused, by a matured deprecations.json entry at the baseline;
+// removing a property that was in the baseline `required` list can NOT be excused: make it optional first):
+//   schema file removed · property removed · type narrowed or lost (incl. a schema node replaced by
+//   true/false/any non-object) · enum value removed ·
 //   property newly in `required` · additionalProperties true/absent -> false ·
 //   constants key path removed · constants array member removed (any JSON type, by JSON text)
 //
-// RISKY (exit 1 unless acknowledged in compat-acknowledgements.json for THIS package.json version):
+// RISKY (exit 1 unless acknowledged in compat-acknowledgements.json for THIS package.json version,
+// which must also DIFFER from the package.json version at the baseline tag):
 //   type widened (incl. integer -> number) or replaced by a $ref · entry removed from `required` ·
 //   items changed (incl. tuple form) · enum/const/pattern/minLength/maxLength/minimum/maximum/
 //   exclusiveMinimum/exclusiveMaximum/multipleOf/format (and minItems/maxItems/uniqueItems/
@@ -25,6 +32,8 @@
 //   additionalProperties sub-schema changed (or opened from false) · any constants scalar changed
 //
 // Deprecation entry:  { "name": "<file>#<pointer or key path>", "deprecatedIn": "<tag>", "removeAfter": "YYYY-MM-DD" }
+//   removeAfter must be a real calendar date; anything else is an invalid entry (exit 1), never matured.
+//   Names are matched literally. Reordering a constants array is not detected (known limits).
 // Acknowledgement:    { "name": "<same naming>", "acknowledgedIn": "<package.json version>", "reason": "<text>" }
 // HARD findings can never be acknowledged. Unmatched acknowledgements are printed as NOTICEs.
 //
@@ -48,6 +57,14 @@ const hard = (name, rule, message, removal = false) => finding("hard", name, rul
 const risky = (name, rule, message) => finding("risky", name, rule, message);
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
+/** True only for a string written YYYY-MM-DD that is a real calendar date (2026-02-30 is not). */
+export function isIsoDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
 const typeSet = (t) => (t === undefined ? null : new Set(Array.isArray(t) ? t : [t]));
 
 const sortKeys = (v) => {
@@ -82,8 +99,20 @@ const canonAdditional = (v) => (v === undefined || v === true ? "true" : canon(v
 
 // Compare two schema nodes at `pointer`. Walks properties, items and definitions.
 function diffNode(file, pointer, oldNode, newNode, out) {
-  if (!isObject(oldNode) || !isObject(newNode)) return;
   const at = (suffix) => `${file}#${pointer}${suffix}`;
+  if (!isObject(oldNode)) return;
+  if (!isObject(newNode)) {
+    // An object schema node replaced by true, false or any other non-object is the same as `{}`:
+    // the baseline's type (and everything else it said) is gone.
+    out.push(
+      hard(
+        at("/type"),
+        "type-lost",
+        `schema node replaced by a non-object (${JSON.stringify(newNode)}): the baseline type ${JSON.stringify(oldNode.type)} is lost`,
+      ),
+    );
+    return;
+  }
 
   // type
   const oldTypes = typeSet(oldNode.type);
@@ -201,6 +230,15 @@ function diffNode(file, pointer, oldNode, newNode, out) {
     out.push(
       hard(at("/additionalProperties"), "additional-properties-closed", "additionalProperties changed from true/absent to false"),
     );
+  } else if (isObject(oa) && !isObject(na)) {
+    // A sub-schema replaced by true, absent or any other non-object loses its type.
+    out.push(
+      hard(
+        at("/additionalProperties/type"),
+        "type-lost",
+        `additionalProperties sub-schema replaced by a non-object (${na === undefined ? "absent" : JSON.stringify(na)}): the baseline type ${JSON.stringify(oa.type)} is lost`,
+      ),
+    );
   } else if (canonAdditional(oa) !== canonAdditional(na)) {
     out.push(
       risky(
@@ -213,14 +251,26 @@ function diffNode(file, pointer, oldNode, newNode, out) {
 
   for (const key of Object.keys(oldProps)) {
     if (!(key in newProps)) {
-      out.push(hard(at(`/properties/${key}`), "property-removed", `property removed: "${key}"`, true));
+      if (oldRequired.includes(key)) {
+        // A required field disappearing makes readers drop whole rows or fail, so no deprecation
+        // window can excuse it: make it optional first (RISKY), release, deprecate, then remove.
+        out.push(
+          hard(
+            at(`/properties/${key}`),
+            "property-removed",
+            `required property removed: "${key}" (cannot be deprecated away: make it optional first, release, deprecate, then remove)`,
+          ),
+        );
+      } else {
+        out.push(hard(at(`/properties/${key}`), "property-removed", `property removed: "${key}"`, true));
+      }
     } else {
       diffNode(file, `${pointer}/properties/${key}`, oldProps[key], newProps[key], out);
     }
   }
 
   // items (single schema recurses; tuple form or a shape change is compared as a whole)
-  if (isObject(oldNode.items) && isObject(newNode.items)) {
+  if (isObject(oldNode.items) && newNode.items !== undefined && !Array.isArray(newNode.items)) {
     diffNode(file, `${pointer}/items`, oldNode.items, newNode.items, out);
   } else if (canon(oldNode.items) !== canon(newNode.items)) {
     out.push(risky(at("/items"), "items-changed", `items changed: ${canon(oldNode.items)} -> ${canon(newNode.items)}`));
@@ -296,11 +346,28 @@ export function applyDeprecations(findings, deprecations, today) {
   const entries = Array.isArray(deprecations) ? deprecations : [];
   const breaking = [];
   const allowed = [];
+  // Every entry whose removeAfter is not a real YYYY-MM-DD date is a problem in its own right and
+  // can never mature.
+  const problems = [];
+  for (const e of entries) {
+    if (!isObject(e)) {
+      problems.push(`deprecation entry ${JSON.stringify(e)} is not an object`);
+    } else if (!isIsoDate(e.removeAfter)) {
+      problems.push(
+        `deprecation entry ${JSON.stringify(e.name)} has an invalid removeAfter ${JSON.stringify(e.removeAfter)}: it must be a real calendar date written YYYY-MM-DD`,
+      );
+    }
+  }
   for (const v of findings) {
-    const entry = v.removal ? entries.find((e) => e && e.name === v.name) : undefined;
+    const entry = v.removal ? entries.find((e) => isObject(e) && e.name === v.name) : undefined;
     if (!entry) {
       breaking.push(v);
-    } else if (typeof entry.removeAfter === "string" && entry.removeAfter <= today) {
+    } else if (!isIsoDate(entry.removeAfter)) {
+      breaking.push({
+        ...v,
+        message: `${v.message} (deprecation entry ignored: removeAfter ${JSON.stringify(entry.removeAfter)} is not a real YYYY-MM-DD date)`,
+      });
+    } else if (entry.removeAfter <= today) {
       allowed.push({ ...v, deprecation: entry });
     } else {
       breaking.push({
@@ -309,7 +376,7 @@ export function applyDeprecations(findings, deprecations, today) {
       });
     }
   }
-  return { breaking, allowed };
+  return { breaking, allowed, problems };
 }
 
 /**
@@ -318,14 +385,25 @@ export function applyDeprecations(findings, deprecations, today) {
  * { unacknowledged, acknowledged, notices }. Entries matching no RISKY finding (including entries
  * naming a HARD finding, which can never be acknowledged) come back as notices.
  */
-export function applyAcknowledgements(riskyFindings, acknowledgements, version, hardFindings = []) {
+export function applyAcknowledgements(riskyFindings, acknowledgements, version, hardFindings = [], baselineVersion = undefined) {
   const entries = Array.isArray(acknowledgements) ? acknowledgements.filter((e) => isObject(e)) : [];
   const unacknowledged = [];
   const acknowledged = [];
   const matchedEntries = new Set();
+  // An acknowledgement is only honoured once package.json has moved on from the baseline tag's
+  // version; otherwise a stale entry from the previous release would silently accept new risks.
+  // `baselineVersion` undefined means "not checked" (pure-function callers); main() always supplies it.
+  const versionNotBumped = baselineVersion !== undefined && baselineVersion === version;
   for (const v of riskyFindings) {
     const named = entries.filter((e) => e.name === v.name);
     named.forEach((e) => matchedEntries.add(e));
+    if (versionNotBumped) {
+      unacknowledged.push({
+        ...v,
+        message: `${v.message} (package.json version ${version} equals the baseline tag version: bump the version before acknowledging)`,
+      });
+      continue;
+    }
     const good = named.find(
       (e) => version !== undefined && e.acknowledgedIn === version && typeof e.reason === "string" && e.reason.trim() !== "",
     );
@@ -366,7 +444,15 @@ export function applyAcknowledgements(riskyFindings, acknowledgements, version, 
  *   acknowledged  RISKY findings accepted by an acknowledgement
  *   notices       stale or ignored acknowledgement entries
  */
-export function compareTrees(baselineFiles, currentFiles, deprecations, today, acknowledgements = [], version = undefined) {
+export function compareTrees(
+  baselineFiles,
+  currentFiles,
+  deprecations,
+  today,
+  acknowledgements = [],
+  version = undefined,
+  baselineVersion = undefined,
+) {
   const all = [];
   for (const path of Object.keys(baselineFiles).sort()) {
     const file = path.split("/").pop();
@@ -382,14 +468,22 @@ export function compareTrees(baselineFiles, currentFiles, deprecations, today, a
   }
   const hardFindings = all.filter((f) => f.tier === "hard");
   const riskyFindings = all.filter((f) => f.tier === "risky");
-  const { breaking, allowed } = applyDeprecations(hardFindings, deprecations, today);
+  const { breaking, allowed, problems } = applyDeprecations(hardFindings, deprecations, today);
   const { unacknowledged, acknowledged, notices } = applyAcknowledgements(
     riskyFindings,
     acknowledgements,
     version,
     hardFindings,
+    baselineVersion,
   );
-  return { breaking, allowed, risky: unacknowledged, acknowledged, notices };
+  return { breaking, allowed, risky: unacknowledged, acknowledged, notices, problems };
+}
+
+/** The package.json version at the baseline tag. `run(args)` executes git; throws when unreadable. */
+export function readBaselineVersion(run, tag) {
+  const version = JSON.parse(run(["show", `${tag}:package.json`])).version;
+  if (typeof version !== "string" || version === "") throw new Error(`${tag}:package.json has no version`);
+  return version;
 }
 
 /**
@@ -488,14 +582,23 @@ function main() {
     return 2;
   }
 
+  let baselineVersion;
+  try {
+    baselineVersion = readBaselineVersion(git, tag);
+  } catch (err) {
+    console.error(`COMPAT CHECK DID NOT RUN: could not read the package.json version at ${tag}: ${err.message}`);
+    return 2;
+  }
+
   const today = new Date().toISOString().slice(0, 10);
-  const { breaking, allowed, risky: unacknowledged, acknowledged, notices } = compareTrees(
+  const { breaking, allowed, risky: unacknowledged, acknowledged, notices, problems } = compareTrees(
     baseline.files,
     readWorkingTree(),
     baseline.deprecations,
     today,
     acknowledgements,
     version,
+    baselineVersion,
   );
 
   for (const a of allowed) console.log(`allowed (deprecation window over): [HARD ${a.rule}] ${a.name} - ${a.message}`);
@@ -512,7 +615,11 @@ function main() {
     console.error(`RISKY changes against ${tag} (add a compat-acknowledgements.json entry for ${version} to accept):`);
     for (const r of unacknowledged) console.error(`  [RISKY ${r.rule}] ${r.name} - ${r.message}`);
   }
-  if (breaking.length > 0 || unacknowledged.length > 0) return 1;
+  if (problems.length > 0) {
+    console.error(`INVALID deprecations.json at ${tag}:`);
+    for (const p of problems) console.error(`  ${p}`);
+  }
+  if (breaking.length > 0 || unacknowledged.length > 0 || problems.length > 0) return 1;
 
   console.log(`compat OK: no unacknowledged changes against ${tag} (${Object.keys(baseline.files).length} files compared)`);
   return 0;

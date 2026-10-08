@@ -10,6 +10,8 @@ import {
   compareTrees,
   diffConstants,
   diffSchema,
+  isIsoDate,
+  readBaselineVersion,
 } from "./check-compat.mjs";
 
 const TODAY = "2026-10-08";
@@ -596,4 +598,193 @@ test("baseline: a failing git tag still lets describe run", () => {
     return "v1.0.0\n";
   };
   assert.deepEqual(chooseBaseline(run), { tag: "v1.0.0", excluded: [] });
+});
+
+// ── Non-object schema nodes (true / false / anything else) ─────────────────────
+
+for (const replacement of [true, false, 5, "string", null]) {
+  const label = JSON.stringify(replacement);
+
+  test(`HARD: a property schema replaced by ${label} loses its type`, () => {
+    const next = base();
+    next.properties.count = replacement;
+    only(diffSchema(F, base(), next), "hard", "type-lost", `${F}#/properties/count/type`);
+  });
+
+  test(`HARD: a nested property schema replaced by ${label} loses its type`, () => {
+    const next = base();
+    next.properties.tags.items.properties.label = replacement;
+    only(diffSchema(F, base(), next), "hard", "type-lost", `${F}#/properties/tags/items/properties/label/type`);
+  });
+
+  test(`HARD: an items schema replaced by ${label} loses its type`, () => {
+    const next = base();
+    next.properties.photos.items = replacement;
+    only(diffSchema(F, base(), next), "hard", "type-lost", `${F}#/properties/photos/items/type`);
+  });
+
+  test(`HARD: a definition replaced by ${label} loses its type`, () => {
+    const next = base();
+    next.definitions.Owner = replacement;
+    only(diffSchema(F, base(), next), "hard", "type-lost", `${F}#/definitions/Owner/type`);
+  });
+}
+
+test("HARD: an additionalProperties sub-schema replaced by true, absent or a non-object loses its type", () => {
+  const before = base();
+  before.additionalProperties = { type: "string" };
+  for (const replacement of [true, 5, "x", null]) {
+    const next = base();
+    next.additionalProperties = replacement;
+    only(diffSchema(F, before, next), "hard", "type-lost", `${F}#/additionalProperties/type`);
+  }
+  only(diffSchema(F, before, base()), "hard", "type-lost", `${F}#/additionalProperties/type`);
+});
+
+test("HARD: an additionalProperties sub-schema replaced by false is hard (closed)", () => {
+  const before = base();
+  before.additionalProperties = { type: "string" };
+  const next = base();
+  next.additionalProperties = false;
+  only(diffSchema(F, before, next), "hard", "additional-properties-closed", `${F}#/additionalProperties`);
+});
+
+test("a baseline true or false node replaced by an object is not reported as type-lost", () => {
+  const before = base();
+  before.properties.count = true;
+  assert.deepEqual(diffSchema(F, before, base()), []);
+});
+
+test("the real shape: lat number replaced by true gives a HARD type-lost through compareTrees", () => {
+  const before = base();
+  before.properties.lat = { type: "number" };
+  const next = base();
+  next.properties.lat = true;
+  const result = compareTrees({ "src/schemas/p.schema.json": before }, { "src/schemas/p.schema.json": next }, [], TODAY);
+  assert.deepEqual(rules(result.breaking), ["type-lost"]);
+});
+
+// ── Stale acknowledgements (package.json version equals the baseline tag version) ──
+
+test("an otherwise valid acknowledgement is refused when the version equals the baseline tag version", () => {
+  const result = compareTrees(
+    { "src/schemas/p.schema.json": base() },
+    { "src/schemas/p.schema.json": photosWidened() },
+    [],
+    TODAY,
+    [{ name: photoName, acknowledgedIn: "1.2.0", reason: "Android reader updated in 1008" }],
+    "1.2.0",
+    "1.2.0",
+  );
+  assert.equal(result.risky.length, 1);
+  assert.deepEqual(result.acknowledged, []);
+  assert.match(
+    result.risky[0].message,
+    /package\.json version 1\.2\.0 equals the baseline tag version: bump the version before acknowledging/,
+  );
+});
+
+test("the same acknowledgement is honoured once the version differs from the baseline tag version", () => {
+  const result = compareTrees(
+    { "src/schemas/p.schema.json": base() },
+    { "src/schemas/p.schema.json": photosWidened() },
+    [],
+    TODAY,
+    [{ name: photoName, acknowledgedIn: "1.2.0", reason: "Android reader updated in 1008" }],
+    "1.2.0",
+    "1.1.0",
+  );
+  assert.deepEqual(result.risky, []);
+  assert.equal(result.acknowledged.length, 1);
+});
+
+test("an equal version refuses every RISKY finding, including ones with no entry at all", () => {
+  const found = diffSchema(F, base(), photosWidened());
+  const out = applyAcknowledgements(found, [], "1.1.0", [], "1.1.0");
+  assert.equal(out.unacknowledged.length, 1);
+  assert.match(out.unacknowledged[0].message, /equals the baseline tag version/);
+});
+
+test("readBaselineVersion reads the version from package.json at the tag through the injected runner", () => {
+  const calls: string[][] = [];
+  const run = (args: string[]) => {
+    calls.push(args);
+    return JSON.stringify({ name: "x", version: "1.0.0" });
+  };
+  assert.equal(readBaselineVersion(run, "v1.0.0"), "1.0.0");
+  assert.deepEqual(calls[0], ["show", "v1.0.0:package.json"]);
+});
+
+test("readBaselineVersion throws when package.json is missing, unparsable or has no version", () => {
+  assert.throws(() => readBaselineVersion(() => { throw new Error("fatal: path does not exist"); }, "v1.0.0"));
+  assert.throws(() => readBaselineVersion(() => "not json", "v1.0.0"));
+  assert.throws(() => readBaselineVersion(() => "{}", "v1.0.0"), /no version/);
+  assert.throws(() => readBaselineVersion(() => JSON.stringify({ version: "" }), "v1.0.0"), /no version/);
+});
+
+// ── Deprecation dates ───────────────────────────────────────────────────────────
+
+test("isIsoDate accepts real calendar dates only", () => {
+  for (const ok of ["2026-10-08", "2028-02-29", "2026-12-31"]) assert.equal(isIsoDate(ok), true, ok);
+  for (const bad of ["", "1/1/2027", "2026-1", "2026-13-40", "2026-02-30", "2027-02-29", "2026-1-01", "2026-10-08T00:00", 20261008, null, undefined]) {
+    assert.equal(isIsoDate(bad), false, String(bad));
+  }
+});
+
+for (const removeAfter of ["", "1/1/2027", "2026-1", "2026-13-40", "2026-02-30", 20260101, null, undefined]) {
+  test(`a deprecation with removeAfter ${JSON.stringify(removeAfter) ?? "undefined"} is invalid and never matures`, () => {
+    const result = compareTrees(
+      { "src/schemas/p.schema.json": base() },
+      { "src/schemas/p.schema.json": removeStatus() },
+      [{ ...removedName, removeAfter }],
+      TODAY,
+    );
+    assert.deepEqual(rules(result.breaking), ["property-removed"]);
+    assert.deepEqual(result.allowed, []);
+    assert.equal(result.problems.length, 1);
+    assert.match(result.problems[0], /invalid removeAfter/);
+  });
+}
+
+test("an invalid deprecation entry is reported even when it matches no finding, and a valid one is not", () => {
+  const out = applyDeprecations([], [{ name: "x#/y", deprecatedIn: "v1", removeAfter: "soon" }, "junk", removedName], TODAY);
+  assert.equal(out.problems.length, 2);
+  assert.deepEqual(applyDeprecations([], [removedName], TODAY).problems, []);
+});
+
+// ── Required fields cannot be deprecated away ───────────────────────────────────
+
+test("HARD: removing a property that was in the baseline required list is not excusable by a matured deprecation", () => {
+  const next = base();
+  delete next.properties.name;
+  next.required = ["id"];
+  const entry = { name: `${F}#/properties/name`, deprecatedIn: "v1.1.0", removeAfter: "2000-01-01" };
+  const found = diffSchema(F, base(), next);
+  only(found, "hard", "property-removed", `${F}#/properties/name`);
+  assert.equal(found[0].removal, false);
+  assert.match(found[0].message, /make it optional first/);
+
+  const result = compareTrees({ "src/schemas/p.schema.json": base() }, { "src/schemas/p.schema.json": next }, [entry], TODAY);
+  assert.deepEqual(rules(result.breaking), ["property-removed"]);
+  assert.deepEqual(result.allowed, []);
+});
+
+test("the route to removing a required property: optional first (RISKY), then deprecate and remove", () => {
+  // Step 1: still present, no longer required. RISKY, acknowledgeable.
+  const optional = base();
+  optional.required = ["id"];
+  only(diffSchema(F, base(), optional), "risky", "required-removed", `${F}#/required/name`);
+
+  // Step 2: the baseline now has it optional, so a matured deprecation can excuse the removal.
+  const removed = base();
+  removed.required = ["id"];
+  delete removed.properties.name;
+  const result = compareTrees(
+    { "src/schemas/p.schema.json": optional },
+    { "src/schemas/p.schema.json": removed },
+    [{ name: `${F}#/properties/name`, deprecatedIn: "v1.2.0", removeAfter: "2026-09-01" }],
+    TODAY,
+  );
+  assert.deepEqual(result.breaking, []);
+  assert.equal(result.allowed.length, 1);
 });
