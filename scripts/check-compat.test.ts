@@ -7,7 +7,8 @@ import { applyDeprecations, compareTrees, diffConstants, diffSchema } from "./ch
 
 const TODAY = "2026-10-08";
 
-const base = () => ({
+// `any`: the cases below mutate this schema freely.
+const base = (): any => ({
   type: "object",
   required: ["id"],
   properties: {
