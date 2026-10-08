@@ -157,9 +157,12 @@ either (it needs the network).
 `data/gb-places.json` is the **single declared location** of the gazetteer. It lives inside this
 repo and is consumed through the pinned checkout. Any script that reads it must:
 
-- take the path from the `YOMP_GAZETTEER` environment variable (`process.env.YOMP_GAZETTEER`, the
-  exact name the yomp-api seo-hubs scripts already use), or from an optional `--gazetteer <path>`
-  argument, with **no hard-coded machine path**;
+- take the path from the `YOMP_GAZETTEER` environment variable (`process.env.YOMP_GAZETTEER`), or
+  from an optional `--gazetteer <path>` argument, with **no hard-coded machine path**. Today this
+  variable is read by the scripts on the yomp-api `seo-hubs` branch only (yomp-api `main` has no
+  `scripts/` directory). Those scripts still fall back to a hard-coded machine path and do not exit
+  with a message naming the variable. WS-10 removes the fallback and adds the clear failure below;
+  until then this rule describes the target, not the current behaviour of those scripts;
 - when the path is unset or the file is missing, exit non-zero with a message that names the
   variable and says how to set it, for example
   `Set YOMP_GAZETTEER to the checked-out data/gb-places.json (PowerShell: $env:YOMP_GAZETTEER = "<repo>\data\gb-places.json").`
@@ -232,12 +235,33 @@ kotlinx throw for the whole array, and a field dropped from `required` may now b
 check has two tiers. Pure additions stay compatible: a new optional property, a new enum member, a
 new constants key or array member, a new schema file.
 
+### What is judged, and the known limits
+
+Compatibility is judged on the **authored sources only**: `src/schemas/*.schema.json` and
+`src/constants/*.json`. The generated `build/` outputs follow from them and are protected by the
+generated-files-up-to-date CI step. Known limits, stated so nobody assumes more cover than exists:
+
+- A change to `scripts/build.mjs` that alters generated names or types **without a schema edit is not
+  covered** by `check:compat`. Review such changes by hand against the generated diff.
+- Deprecation names are matched **literally** against the finding's name. A typo, or a pointer that
+  does not match exactly, simply does not excuse anything.
+- Reordering a constants array is **not detected**: members are compared as a set by JSON text, so only
+  a removed member is reported.
+- Schema nodes are compared keyword by keyword; the check does not evaluate `$ref` targets or
+  combinator branches semantically, only whether they changed.
+
 ### HARD (exit 1)
 
 Only a **removal** can be excused, by a matured deprecation (below). Never by an acknowledgement.
+The one exception to that is a **required** property: removing a property that was in the baseline
+`required` list can never be excused, because readers drop whole rows or fail when a required field
+disappears. The route is: first make it optional (a RISKY `required` removal, which needs an
+acknowledgement), release, deprecate, then remove.
 
 - a schema file removed; a property or definition removed (a rename is a removal plus an addition);
-- a `type` narrowed or lost;
+- a property removed that was in the baseline `required` list (not excusable by a deprecation);
+- a `type` narrowed or lost, including a schema node (a property, `items`, a definition or an
+  `additionalProperties` sub-schema) replaced by `true`, `false` or any other non-object;
 - an enum value removed;
 - a property newly added to `required`;
 - `additionalProperties` changed from true or absent to `false`;
@@ -271,9 +295,13 @@ tree** (it ships as `[]`):
 
 `name` uses the same scheme as deprecation names (`<file>#<pointer or key path>`; the check prints
 the exact name for every finding, with its tier and rule). `acknowledgedIn` must equal `version` in
-the working tree's `package.json`, and `reason` must be non-empty. An entry for another version,
-with an empty reason, or matching no finding is not accepted; entries that match nothing are printed
-as a NOTICE so stale ones get cleaned out. Acknowledge only after checking every reader.
+the working tree's `package.json`, and `reason` must be non-empty. In addition, that `version` must
+**differ from the `package.json` version at the baseline tag** (read with `git show <tag>:package.json`).
+If they are equal, no RISKY finding can be acknowledged and the check says `package.json version X
+equals the baseline tag version: bump the version before acknowledging`; this stops a leftover entry
+from the previous release silently accepting new risks. An entry for another version, with an empty
+reason, or matching no finding is not accepted; entries that match nothing are printed as a NOTICE so
+stale ones get cleaned out. Acknowledge only after checking every reader.
 
 ### Deprecation window for a HARD removal
 
@@ -283,13 +311,19 @@ A breaking removal needs a **deprecation window**:
    `{ "name": "place.schema.json#/properties/foo", "deprecatedIn": "v1.2.0", "removeAfter": "2026-12-01" }`.
    `name` is the schema or constants file name, `#`, then the JSON pointer (schemas) or dotted key
    path (constants; an array member is `key[member]`; an enum value is `.../enum/<value>`).
-2. `removeAfter` must be at least **30 days** after the date of the release that deprecates it.
+2. `removeAfter` must be a real calendar date written `YYYY-MM-DD` and at least **30 days** after the
+   date of the release that deprecates it.
 3. Remove it in a **later** release, on or after `removeAfter`. `check:compat` reads
    `deprecations.json` from the baseline tag, so the entry must already be in a published tag.
 
-The check enforces 3 (and that the entry matches). The 30-day minimum in 2 is a review rule.
-Type narrowing, new required fields and closing `additionalProperties` cannot be deprecated away;
-they need a new contract (a new schema or a major version agreed with every consumer).
+What the check actually enforces: the entry exists at the baseline tag, its `name` equals the
+finding's name literally, `removeAfter` is a real `YYYY-MM-DD` date, and that date is today or past.
+An empty, malformed or non-string date (`""`, `1/1/2027`, `2026-1`, `2026-13-40`) makes the entry
+invalid: it is reported as a problem (exit 1) and never matures. The 30-day minimum in 2 is a review
+rule and is **not** checked, nor is `deprecatedIn`.
+Type narrowing, new required fields, closing `additionalProperties` and removing a property that was
+required cannot be deprecated away; the first three need a new contract (a new schema or a major
+version agreed with every consumer), and a required property must be made optional first (see HARD).
 
 Android builds 1004-1007 are in the field and must keep parsing every response shape, so any
 change to the `/api/places` shape (`place.schema.json`) follows these rules exactly.
