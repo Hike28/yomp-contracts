@@ -1,0 +1,78 @@
+[
+  {
+    "id": "ChIJfixture0000000000000001",
+    "name": "The Fixture Arms",
+    "lat": 54.9793,
+    "lng": -1.6178,
+    "type": "pub",
+    "dogStatus": "yes",
+    "rating": 4.5,
+    "ratingCount": 312,
+    "address": "1 Example Street, Newcastle upon Tyne NE1 0AA",
+    "phone": "01632 960001",
+    "website": "https://example.com/the-fixture-arms",
+    "openNow": true,
+    "todayHours": "11:00 am to 11:00 pm",
+    "weeklyHours": [
+      "Monday: 11:00 am to 11:00 pm",
+      "Tuesday: 11:00 am to 11:00 pm",
+      "Wednesday: 11:00 am to 11:00 pm",
+      "Thursday: 11:00 am to 11:00 pm",
+      "Friday: 11:00 am to 12:00 am",
+      "Saturday: 11:00 am to 12:00 am",
+      "Sunday: 12:00 pm to 10:30 pm"
+    ],
+    "mainImage": "https://lh3.googleusercontent.com/example-fixture-image-0001",
+    "photoNames": [
+      "places/ChIJfixture0000000000000001/photos/AVzfixture0001",
+      "places/ChIJfixture0000000000000001/photos/AVzfixture0002",
+      "places/ChIJfixture0000000000000001/photos/AVzfixture0003"
+    ],
+    "editorialSummary": "Traditional pub with a beer garden and a water bowl by the door.",
+    "dogStatusSource": "community",
+    "dogStatusConfidence": "high",
+    "dogStatusVoteCount": 14,
+    "businessStatus": "OPERATIONAL",
+    "tier": "verified_basic"
+  },
+  {
+    "id": "dfseo_fixture_0002",
+    "name": "Example Corner Cafe",
+    "lat": 54.9783,
+    "lng": -1.6158,
+    "type": "cafe",
+    "dogStatus": "unknown",
+    "rating": 3.8,
+    "ratingCount": 41,
+    "address": "2 Sample Road, Newcastle upon Tyne NE2 0BB",
+    "phone": "01632 960002",
+    "website": "https://example.com/example-corner-cafe",
+    "openNow": false,
+    "todayHours": "Closed",
+    "weeklyHours": [],
+    "photoNames": [],
+    "dogStatusSource": "default",
+    "dogStatusConfidence": "low",
+    "businessStatus": "CLOSED_TEMPORARILY",
+    "tier": "claimed"
+  },
+  {
+    "id": "osm_fixture_0003",
+    "name": "Sample Common",
+    "lat": 54.9773,
+    "lng": -1.6178,
+    "type": "park",
+    "dogStatus": "no",
+    "dogStatusSource": "owner",
+    "dogStatusConfidence": "medium",
+    "tier": "unclaimed"
+  },
+  {
+    "id": "osm_fixture_0004",
+    "name": "Placeholder Green",
+    "lat": 54.9803,
+    "lng": -1.6198,
+    "type": "park",
+    "dogStatus": "yes"
+  }
+]

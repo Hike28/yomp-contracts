@@ -10,8 +10,8 @@ philosophy: **one source → generated outputs → pinned by consumers.**
 
 | Consumer | How it consumes | What it reads |
 |---|---|---|
-| `yomp-android` | git submodule at `vendor/yomp-contracts`, pinned to a commit or tag | `build/kotlin/` (compiled into `:shared`), `data/gb-places.json`, and `fixtures/` (once added) |
-| `yomp-api` | **plain vendored copy** of `build/ts/constants.ts`, `build/ts/place-stats.ts` and `build/ts/place.ts`, pinned by a pin file in that repo (not a submodule) | its response types come from `build/ts/place.ts` |
+| `yomp-android` | git submodule at `vendor/yomp-contracts`, pinned to a commit or tag | `build/kotlin/` (compiled into `:shared`), `data/gb-places.json`, and `fixtures/places-response.json` (read by a unit test) |
+| `yomp-api` | **plain vendored copy** of `build/ts/constants.ts`, `build/ts/place-stats.ts`, `build/ts/place.ts`, `src/schemas/place.schema.json` and `fixtures/places-response.json`, pinned by a pin file in that repo (not a submodule) | response types from `build/ts/place.ts`; its tests validate the route output against the schema and the fixture |
 | `yomp-web` | does not consume this repo; it takes design tokens only, from `yomp-tokens` | nothing |
 
 `yomp-next`, the old web app that this README used to name as the consumer, is retired.
@@ -30,6 +30,9 @@ scripts/check-compat.mjs      compatibility check against the latest release tag
 scripts/*.test.ts             node:test suites (contracts, gazetteer integrity, compat diff)
 deprecations.json             deprecation register read by the compat check
 data/gb-places.json           COMMITTED derived data — read directly, never codegen'd
+fixtures/places-response.json COMMITTED sample of a GET /api/places body, emitted by yomp-api's own
+                              route handler with upstreams mocked (synthetic venues, no credentials);
+                              validated against place.schema.json here and in yomp-api, read by Android
 build/ts/                     GENERATED TypeScript (committed)
 build/kotlin/common/          GENERATED Kotlin — commonMain-safe (committed)
 build/kotlin/android/         GENERATED Kotlin — Firebase/androidMain-bound (committed)
@@ -38,6 +41,15 @@ docs/                         design notes
 ```
 
 `build/` is **committed** — consumers read the generated files and never run codegen themselves.
+
+### The places fixture
+
+`fixtures/places-response.json` is not hand-written. It is the body yomp-api's own `GET /api/places`
+handler emits for four synthetic venues (every upstream mocked, no network, no spend). To regenerate
+it, run yomp-api's `tests/unit/places.contract-fixture.test.ts` with `WS7_FIXTURE_OUT` set to the
+output path, then copy the file here and bump the pins in the consumers. Treat a change to it like a
+change to the schema: the compatibility rule below applies, because Android builds 1004-1007 parse
+this shape.
 
 ### What `npm run build` produces
 
