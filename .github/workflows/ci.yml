@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The compat check diffs against the latest release tag, so it needs history and tags.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build generated files
+        run: npm run build
+
+      - name: Generated files are up to date
+        run: |
+          status="$(git status --porcelain)"
+          if [ -n "$status" ]; then
+            echo "Generated files are out of date (or untracked). Run 'npm run build' and commit the result:"
+            echo "$status"
+            git --no-pager diff --stat
+            exit 1
+          fi
+
+      - name: Type-check generated TypeScript
+        run: npm run verify
+
+      - name: Test
+        run: npm test
+
+      - name: Compatibility check
+        run: npm run check:compat
