@@ -1,27 +1,60 @@
 # yomp-contracts
 
-Language-neutral source of truth for Yomp's **Firestore data contracts**. One authored source
-generates per-language outputs so the web app (`yomp-next`, TypeScript) and native app
-(`yomp-android`, Kotlin/Compose) — which share one Firebase project and dataset — can never drift.
+Language-neutral source of truth for Yomp's **data contracts**. One authored source generates
+per-language outputs (TypeScript and Kotlin) so the API and the native app can never drift.
 
 Sibling repo to [`yomp-tokens`](https://github.com/Hike28/yomp-tokens) (design tokens); same
-philosophy: **one source → generated outputs → distributed as a git submodule.**
+philosophy: **one source → generated outputs → pinned by consumers.**
+
+## Who consumes this
+
+| Consumer | How it consumes | What it reads |
+|---|---|---|
+| `yomp-android` | git submodule at `vendor/yomp-contracts`, pinned to a commit or tag | `build/kotlin/` (compiled into `:shared`), `data/gb-places.json`, and `fixtures/` (once added) |
+| `yomp-api` | **plain vendored copy** of `build/ts/constants.ts`, `build/ts/place-stats.ts` and `build/ts/place.ts`, pinned by a pin file in that repo (not a submodule) | its response types come from `build/ts/place.ts` |
+| `yomp-web` | does not consume this repo; it takes design tokens only, from `yomp-tokens` | nothing |
+
+`yomp-next`, the old web app that this README used to name as the consumer, is retired.
+
+Consumers pin an **exact tag or commit** and update on purpose. They never track a branch, and
+they never run codegen themselves.
 
 ## Layout
 
 ```
-src/schemas/*.schema.json     authored JSON Schema (draft-07) — document shapes
-src/constants/community.json  authored constant values — enums, thresholds, rules
+src/schemas/*.schema.json     authored JSON Schema (draft-07) — document and response shapes
+src/constants/*.json          authored constant values — enums, thresholds, limits, rules
 scripts/build.mjs             codegen: quicktype (shapes) + constants emitter
-scripts/build-gazetteer.mjs   DATA build: OS Open Names → data/ (separate entrypoint)
-data/                         COMMITTED derived data — read directly, never codegen'd
+scripts/build-gazetteer.mjs   DATA build: OS Open Names → data/ (separate entrypoint, network)
+scripts/check-compat.mjs      compatibility check against the latest release tag
+scripts/*.test.ts             node:test suites (contracts, gazetteer integrity, compat diff)
+deprecations.json             deprecation register read by the compat check
+data/gb-places.json           COMMITTED derived data — read directly, never codegen'd
 build/ts/                     GENERATED TypeScript (committed)
 build/kotlin/common/          GENERATED Kotlin — commonMain-safe (committed)
 build/kotlin/android/         GENERATED Kotlin — Firebase/androidMain-bound (committed)
+docs/                         design notes
+.github/workflows/ci.yml      CI
 ```
 
-`build/` is **committed** — consumers read the generated files via the submodule and never run
-codegen themselves.
+`build/` is **committed** — consumers read the generated files and never run codegen themselves.
+
+### What `npm run build` produces
+
+Schemas (`src/schemas/`): `place`, `place-stats`, `saved-place`, `user-record`.
+Constants (`src/constants/`): `community`, `map`, `account`, `saved-places`.
+
+| Output | Source |
+|---|---|
+| `build/ts/place.ts`, `build/kotlin/common/Place.kt` | `place.schema.json` |
+| `build/ts/place-stats.ts`, `build/kotlin/android/PlaceStats.kt` | `place-stats.schema.json` |
+| `build/ts/user-record.ts`, `build/kotlin/android/UserRecord.kt` | `user-record.schema.json` |
+| `build/ts/constants.ts` (all constants, doc-id helpers, `deriveDogVerdict`) | `community`, `map`, `account`, `saved-places` constants plus key lists derived from `user-record` and `saved-place` schemas |
+| `build/kotlin/common/Community.kt`, `DogVerdict.kt`, `Map.kt`, `Account.kt`, `SavedPlaces.kt` | the same constants |
+| `build/kotlin/common/UserKeys.kt`, `SavedPlaceKeys.kt` | property names of the `user-record` and `saved-place` schemas |
+
+`data/gb-places.json` is **not** a build output; see "GB place gazetteer" below.
+`src/constants/Roles.kt` and `roles.ts` are authored files that the build does not read.
 
 ## What's encoded so far
 
@@ -102,15 +135,29 @@ force a fresh pull when OS publishes a new version; the current build is OS prod
 to WGS84 is mandatory and is done with `proj4` (OSGB36 7-parameter Helmert, ~2–5 m — fine
 for settlement centroids, not for anything survey-grade).
 
-Consumers **never run this**. They read the committed JSON via the submodule, exactly as
-they read `build/`. Nothing is downloaded at consumer build time.
+Consumers **never run this**. They read the committed JSON through their pinned checkout,
+exactly as they read `build/`. Nothing is downloaded at consumer build time. CI never runs it
+either (it needs the network).
+
+### Gazetteer location
+
+`data/gb-places.json` is the **single declared location** of the gazetteer. It lives inside this
+repo and is consumed through the pinned checkout. Any script that reads it must:
+
+- take the path from the `YOMP_GAZETTEER_PATH` environment variable (or a `--gazetteer <path>`
+  argument), with **no hard-coded machine path**;
+- when the path is unset or the file is missing, exit non-zero with a message that names the
+  variable and says how to set it, for example
+  `Set YOMP_GAZETTEER_PATH to the checked-out data/gb-places.json (PowerShell: $env:YOMP_GAZETTEER_PATH = "<repo>\data\gb-places.json").`
+
+Inside this repo the tests resolve the file relative to the repo root, which is also compliant.
 
 ### Attribution — required
 
 OS Open Names is released under the [Open Government Licence v3](http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
 Any app shipping this dataset **must surface this line in its UI** — not merely in a repo
 file. Put it wherever map data is credited (`yomp-android`'s map/search screen and
-`yomp-next`'s map attribution, alongside the existing map-provider credits):
+any web map attribution, alongside the existing map-provider credits):
 
 > Contains OS data © Crown Copyright and database rights 2026.
 
@@ -122,24 +169,80 @@ gazetteer is regenerated from a newer OS release.
 ## Build
 
 ```sh
-npm install
-npm run build     # regenerate build/ts + build/kotlin
-npm run verify    # tsc --noEmit on the generated TypeScript
-npm test          # node --test (contracts + gazetteer integrity)
+npm ci
+npm run build          # regenerate build/ts + build/kotlin
+npm run verify         # tsc --noEmit on the generated TypeScript
+npm test               # node --test (contracts, gazetteer integrity, compat diff)
+npm run check:compat   # additive-only check against the latest release tag
+npm run build:gazetteer  # network; regenerates data/gb-places.json; never run in CI
 ```
 
 The Kotlin output is **emitted only** here; it is compiled when `yomp-android`'s `:shared` module
 consumes this repo (Kotlin package `dog.yomp.contracts`).
 
-## Consuming as a submodule
+## CI and releases
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request: `npm ci`,
+`npm run build`, a **generated-files-up-to-date** check (fails if the build leaves any tracked
+change or untracked file, so edit the source and commit the rebuilt `build/`), `npm run verify`,
+`npm test`, and `npm run check:compat`. It checks out full history and tags because the compat
+check needs them.
+
+Line endings are pinned to LF by `.gitattributes`, so generated files compare byte for byte on
+every platform.
+
+A release is an annotated git tag `vMAJOR.MINOR.PATCH` on `main`, matching `version` in
+`package.json`, with an entry in `CHANGELOG.md`. The compat check uses the latest tag as its
+baseline; with no tag it exits 2 (`NO BASELINE TAG: compat check did not run`) rather than
+passing.
+
+## Compatibility rule
+
+Contracts change by **addition only**. Adding an optional field, a new enum value, a new
+constant or a new schema is fine. These are **breaking**:
+
+- removing or renaming a field (a rename is a removal plus an addition);
+- changing or narrowing a field's `type`;
+- removing an enum value;
+- adding a field to `required`;
+- changing `additionalProperties` from true or absent to `false`;
+- removing a constants key or a string member of a constants array.
+
+A breaking removal needs a **deprecation window**:
+
+1. In the release that deprecates it, add an entry to `deprecations.json`:
+   `{ "name": "place.schema.json#/properties/foo", "deprecatedIn": "v1.2.0", "removeAfter": "2026-12-01" }`.
+   `name` is the schema or constants file name, `#`, then the JSON pointer (schemas) or dotted key
+   path (constants; an array member is `key[member]`; an enum value is `.../enum/<value>`).
+2. `removeAfter` must be at least **30 days** after the date of the release that deprecates it.
+3. Remove it in a **later** release, on or after `removeAfter`. `check:compat` reads
+   `deprecations.json` from the baseline tag, so the entry must already be in a published tag.
+
+The check enforces 3 (and that the entry matches). The 30-day minimum in 2 is a review rule.
+Type narrowing, new required fields and closing `additionalProperties` cannot be deprecated away;
+they need a new contract (a new schema or a major version agreed with every consumer).
+
+Android builds 1004-1007 are in the field and must keep parsing every response shape, so any
+change to the `/api/places` shape (`place.schema.json`) follows this rule exactly.
+
+## Consuming
+
+**`yomp-android`** (submodule):
 
 ```sh
 git submodule add https://github.com/Hike28/yomp-contracts vendor/yomp-contracts
+git -C vendor/yomp-contracts checkout v1.1.0   # pin an exact tag or commit
 ```
 
-Web imports from `build/ts/`; native sources `build/kotlin/common/` into `:shared` commonMain and
-`build/kotlin/android/` into androidMain (the latter carries the Firebase `Timestamp` typealias).
-(Wiring is done in the consuming repos, not here.)
+Native sources `build/kotlin/common/` into `:shared` commonMain and `build/kotlin/android/` into
+androidMain (the latter carries the Firebase `Timestamp` reference). Gazetteer and fixtures are read from
+the same pinned checkout.
+
+**`yomp-api`** (vendored copy): copy `build/ts/constants.ts`, `build/ts/place-stats.ts` and
+`build/ts/place.ts` at a chosen tag, and record that tag or commit in the repo's pin file. Update
+by copying again from a newer tag on purpose.
+
+Wiring is done in the consuming repos, not here.
 
 Because `yomp-android` consumes `build/kotlin/common/` as a Gradle source set, the generated Kotlin is
 subject to that repo's ktlint line-length rule. The generator therefore wraps the doc comments it
