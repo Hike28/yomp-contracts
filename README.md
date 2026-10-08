@@ -26,9 +26,10 @@ src/schemas/*.schema.json     authored JSON Schema (draft-07) — document and r
 src/constants/*.json          authored constant values — enums, thresholds, limits, rules
 scripts/build.mjs             codegen: quicktype (shapes) + constants emitter
 scripts/build-gazetteer.mjs   DATA build: OS Open Names → data/ (separate entrypoint, network)
-scripts/check-compat.mjs      compatibility check against the latest release tag
+scripts/check-compat.mjs      two-tier compatibility check against the previous release tag
 scripts/*.test.ts             node:test suites (contracts, gazetteer integrity, compat diff)
-deprecations.json             deprecation register read by the compat check
+deprecations.json             deprecation register read by the compat check (from the baseline tag)
+compat-acknowledgements.json  accepted RISKY changes for the version being released (working tree)
 data/gb-places.json           COMMITTED derived data — read directly, never codegen'd
 fixtures/places-response.json COMMITTED sample of a GET /api/places body, emitted by yomp-api's own
                               route handler with upstreams mocked (synthetic venues, no credentials);
@@ -156,11 +157,12 @@ either (it needs the network).
 `data/gb-places.json` is the **single declared location** of the gazetteer. It lives inside this
 repo and is consumed through the pinned checkout. Any script that reads it must:
 
-- take the path from the `YOMP_GAZETTEER_PATH` environment variable (or a `--gazetteer <path>`
-  argument), with **no hard-coded machine path**;
+- take the path from the `YOMP_GAZETTEER` environment variable (`process.env.YOMP_GAZETTEER`, the
+  exact name the yomp-api seo-hubs scripts already use), or from an optional `--gazetteer <path>`
+  argument, with **no hard-coded machine path**;
 - when the path is unset or the file is missing, exit non-zero with a message that names the
   variable and says how to set it, for example
-  `Set YOMP_GAZETTEER_PATH to the checked-out data/gb-places.json (PowerShell: $env:YOMP_GAZETTEER_PATH = "<repo>\data\gb-places.json").`
+  `Set YOMP_GAZETTEER to the checked-out data/gb-places.json (PowerShell: $env:YOMP_GAZETTEER = "<repo>\data\gb-places.json").`
 
 Inside this repo the tests resolve the file relative to the repo root, which is also compliant.
 
@@ -185,7 +187,7 @@ npm ci
 npm run build          # regenerate build/ts + build/kotlin
 npm run verify         # tsc --noEmit on the generated TypeScript
 npm test               # node --test (contracts, gazetteer integrity, compat diff)
-npm run check:compat   # additive-only check against the latest release tag
+npm run check:compat   # two-tier compatibility check against the previous release tag
 npm run build:gazetteer  # network; regenerates data/gb-places.json; never run in CI
 ```
 
@@ -204,21 +206,76 @@ Line endings are pinned to LF by `.gitattributes`, so generated files compare by
 every platform.
 
 A release is an annotated git tag `vMAJOR.MINOR.PATCH` on `main`, matching `version` in
-`package.json`, with an entry in `CHANGELOG.md`. The compat check uses the latest tag as its
-baseline; with no tag it exits 2 (`NO BASELINE TAG: compat check did not run`) rather than
-passing.
+`package.json`, with an entry in `CHANGELOG.md`. The compat check uses as its baseline the latest
+tag reachable from HEAD **excluding every tag that points at HEAD** (`git tag --points-at HEAD`,
+each passed to `git describe --tags --abbrev=0` as `--exclude`), so a tagged release is compared
+with the release before it, never with itself. It prints which tag it used and which it excluded.
+When HEAD is untagged, that is simply the latest tag. With no baseline tag it exits 2
+(`NO BASELINE TAG: compat check did not run`) rather than passing.
+
+Release procedure:
+
+1. Merge to `main` **fast-forward or with a merge commit. Never squash and never rebase.** The tagged
+   commit, and the pins other repos hold (`yomp-android`'s submodule commit, `yomp-api`'s pin
+   file), must stay reachable from `main`; a squash or rebase rewrites them away.
+2. **Push the tags before opening or merging a PR.** The compat step needs the baseline tag on the
+   remote, and CI fetches full history and tags.
+3. Record any accepted RISKY change in `compat-acknowledgements.json` (see below) in the same
+   release.
 
 ## Compatibility rule
 
-Contracts change by **addition only**. Adding an optional field, a new enum value, a new
-constant or a new schema is fine. These are **breaking**:
+Compatibility is judged for the **readers**: the hand-written Android `PlaceDto` readers (builds
+1004-1007) and yomp-api's vendored types. A reader breaks when a response gets stricter, and also
+when it gets **looser**: a type widened so a string appears where a `Double` is parsed makes
+kotlinx throw for the whole array, and a field dropped from `required` may now be missing. So the
+check has two tiers. Pure additions stay compatible: a new optional property, a new enum member, a
+new constants key or array member, a new schema file.
 
-- removing or renaming a field (a rename is a removal plus an addition);
-- changing or narrowing a field's `type`;
-- removing an enum value;
-- adding a field to `required`;
-- changing `additionalProperties` from true or absent to `false`;
-- removing a constants key or a string member of a constants array.
+### HARD (exit 1)
+
+Only a **removal** can be excused, by a matured deprecation (below). Never by an acknowledgement.
+
+- a schema file removed; a property or definition removed (a rename is a removal plus an addition);
+- a `type` narrowed or lost;
+- an enum value removed;
+- a property newly added to `required`;
+- `additionalProperties` changed from true or absent to `false`;
+- a constants key path removed;
+- a constants array member removed, of any JSON type (compared by JSON text).
+
+### RISKY (exit 1 unless acknowledged)
+
+- a `type` widened or changed in any other way (including `integer` to `number`, and a type
+  replaced by a `$ref`);
+- an entry removed from `required`;
+- `items` changed in type or shape (including tuple-form `items`);
+- `enum`, `const`, `pattern`, `minLength`, `maxLength`, `minimum`, `maximum`, `exclusiveMinimum`,
+  `exclusiveMaximum`, `multipleOf` or `format` added where the baseline lacked it, or its value
+  changed (the check also covers `minItems`, `maxItems`, `uniqueItems`, `minProperties`,
+  `maxProperties`, and a keyword dropped);
+- a `$ref` retargeted;
+- `oneOf`, `anyOf`, `allOf` or `not` changed (compared by canonical JSON);
+- `title` or `$id` changed (`title` names the generated Kotlin class);
+- an `additionalProperties` sub-schema changed (or opened from `false`);
+- any constants scalar value changed (for example a radius of 50 becoming 5, or a renamed string).
+
+### Acknowledging a RISKY change
+
+A RISKY finding is accepted only by an entry in `compat-acknowledgements.json` **in the working
+tree** (it ships as `[]`):
+
+```json
+{ "name": "place.schema.json#/properties/photoNames/items/type", "acknowledgedIn": "1.2.0", "reason": "Android 1008 parses either; readers on 1004-1007 verified." }
+```
+
+`name` uses the same scheme as deprecation names (`<file>#<pointer or key path>`; the check prints
+the exact name for every finding, with its tier and rule). `acknowledgedIn` must equal `version` in
+the working tree's `package.json`, and `reason` must be non-empty. An entry for another version,
+with an empty reason, or matching no finding is not accepted; entries that match nothing are printed
+as a NOTICE so stale ones get cleaned out. Acknowledge only after checking every reader.
+
+### Deprecation window for a HARD removal
 
 A breaking removal needs a **deprecation window**:
 
@@ -235,7 +292,7 @@ Type narrowing, new required fields and closing `additionalProperties` cannot be
 they need a new contract (a new schema or a major version agreed with every consumer).
 
 Android builds 1004-1007 are in the field and must keep parsing every response shape, so any
-change to the `/api/places` shape (`place.schema.json`) follows this rule exactly.
+change to the `/api/places` shape (`place.schema.json`) follows these rules exactly.
 
 ## Consuming
 
@@ -250,9 +307,10 @@ Native sources `build/kotlin/common/` into `:shared` commonMain and `build/kotli
 androidMain (the latter carries the Firebase `Timestamp` reference). Gazetteer and fixtures are read from
 the same pinned checkout.
 
-**`yomp-api`** (vendored copy): copy `build/ts/constants.ts`, `build/ts/place-stats.ts` and
-`build/ts/place.ts` at a chosen tag, and record that tag or commit in the repo's pin file. Update
-by copying again from a newer tag on purpose.
+**`yomp-api`** (vendored copy): copy `build/ts/constants.ts`, `build/ts/place-stats.ts`,
+`build/ts/place.ts`, `src/schemas/place.schema.json` and `fixtures/places-response.json` at a chosen
+tag (the five files in the consumer table above), and record that tag or commit in the repo's pin
+file. Update by copying again from a newer tag on purpose.
 
 Wiring is done in the consuming repos, not here.
 

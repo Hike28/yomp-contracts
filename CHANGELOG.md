@@ -9,8 +9,14 @@ Tooling and documentation only. No schema, constant or generated-file changes.
 
 - CI (`.github/workflows/ci.yml`): build, generated-files-up-to-date check, `verify`, `test`,
   `check:compat`.
-- `npm run check:compat` (`scripts/check-compat.mjs`): additive-only check against the latest
+- `npm run check:compat` (`scripts/check-compat.mjs`): compatibility check against the previous
   release tag, with `deprecations.json` (empty) for deprecation windows.
+  - Two tiers, judged for readers: HARD findings (removals, narrowing, new `required`, closed
+    `additionalProperties`) always fail; RISKY findings (widening, loosening, retargeted `$ref`,
+    changed constants values and the like) fail unless accepted in `compat-acknowledgements.json`
+    for the package version, with a reason.
+  - The baseline excludes the commit's own tag, so a tagged release is compared with the release
+    before it rather than with itself.
 - `.gitattributes` pins LF line endings so generated files are byte-identical on every platform.
 - README rewritten: real consumers (`yomp-android` submodule, `yomp-api` vendored copy), what the
   build emits, scripts, CI and release tags, the compatibility rule and the gazetteer location rule.
